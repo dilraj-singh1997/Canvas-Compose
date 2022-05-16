@@ -45,7 +45,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -74,9 +76,18 @@ import com.compose.type_safe_args.annotation.HasDefaultValue
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.ProvideWindowInsets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.Serializable
+import java.lang.Exception
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
@@ -100,23 +111,76 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Screen() {
-    var heartCount by remember { mutableStateOf(0) }
+
+    val hearts = remember {
+        mutableStateListOf<ItemState>()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        repeat(heartCount) {
-            Heart(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 36.dp),
-                horizontalPadding = 24,
-                bottomMargin = 110
-            )
+        Heart(
+            modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp),
+            horizontalPadding = 24,
+            bottomMargin = 110,
+            items = hearts
+        )
+
+        val width = with (LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+        val height = with (LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+
+        val listSize = remember {
+            derivedStateOf {
+                hearts.size
+            }
         }
+
+        val channel = remember {
+            Channel<Int>(Channel.UNLIMITED)
+        }
+
+        LaunchedEffect(true) {
+            for (item in channel) {
+                launch {
+                    withContext(Dispatchers.IO) {
+                        while (hearts[item].y > 0) {
+                            delay(100)
+                            hearts[item] = hearts[item].copy(y = hearts[item].y - 10)
+                        }
+                    }
+                }
+            }
+        }
+
+//        LaunchedEffect(true) {
+//            snapshotFlow { listSize.value }.flowOn(Dispatchers.Default).collectLatest {
+//
+//                val ctx = suspendCancellableCoroutine<Unit> {
+//                    while (hearts.isNotEmpty()) {
+//                        val iter = hearts.iterator()
+//                        var c = 0
+//                        while (iter.hasNext()) {
+//                            hearts.safeSet(c) {
+//                                it.copy(y = it.y - 1)
+//                            }
+//                            c++
+//                        }
+//
+//                    }
+//                }
+//            }
+//
+//            while (true) {
+//
+//            }
+//        }
 
         Button(
             onClick = {
-                heartCount++
+                val idx = hearts.size
+                hearts.add(ItemState(x = Random.nextInt(0, (width).toInt()).toFloat(), y = Random.nextInt(0, (height).toInt()).toFloat()))
+                channel.trySend(idx)
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -133,13 +197,18 @@ fun Screen() {
     }
 }
 
+data class ItemState(
+    val x: Float,
+    val y: Float
+)
+
 enum class HeartState {
     Show,
     Hide
 }
 
 @Composable
-fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<Int> = listOf()) {
+fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
     val width = LocalConfiguration.current.screenWidthDp
     val height = LocalConfiguration.current.screenHeightDp
 
@@ -178,44 +247,46 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
 
     Canvas(modifier = modifier,
         onDraw = {
-            val path = Path().apply {
-                heartPath(Size(120f, 120f))
-            }
-            Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
-            translate(top = offsetYAnimation) {
-                drawContext.canvas.nativeCanvas.apply {
-                    drawText("hello\uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
-                        color = android.graphics.Color.GREEN
-                        isAntiAlias = true
-                        textSize = 124f
-                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                    })
+            for (item in items) {
+                val path = Path().apply {
+                    heartPath(Size(120f, 120f))
                 }
-                drawPath(
-                    path = path,
-                    color = Color.Red,
-                )
+                Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
+                translate(top = item.y, left = item.x) {
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText("hello\uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
+                            color = android.graphics.Color.GREEN
+                            isAntiAlias = true
+                            textSize = 124f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        })
+                    }
+                    drawPath(
+                        path = path,
+                        color = Color.Red,
+                    )
+                }
             }
         }
     )
 }
 
-@Composable
-fun Heart() {
-    Canvas(modifier = Modifier
-        .fillMaxSize(),
-        onDraw = {
-            val path = Path().apply {
-                heartPath(Size(120f, 120f))
-            }
-
-            drawPath(
-                path = path,
-                color = Color.Red,
-            )
-        }
-    )
-}
+//@Composable
+//fun Heart() {
+//    Canvas(modifier = Modifier
+//        .fillMaxSize(),
+//        onDraw = {
+//            val path = Path().apply {
+//                heartPath(Size(120f, 120f))
+//            }
+//
+//            drawPath(
+//                path = path,
+//                color = Color.Red,
+//            )
+//        }
+//    )
+//}
 
 fun Path.heartPath(size: Size): Path {
     //the logic is taken from StackOverFlow [answer](https://stackoverflow.com/a/41251829/5348665)and converted into extension function
@@ -453,5 +524,22 @@ fun KeyboardVisibilityListener(keyboardVisibilityChanged: (isKeyboardVisible: Bo
         snapshotFlow { keyboard.isVisible }.distinctUntilChanged().collect {
             keyboardVisibilityChangedUpdated(it)
         }
+    }
+}
+
+fun <T> List<T>.safeGet(index: Int?): T? {
+    return if (index != null && index >= 0 && index <= lastIndex) {
+        this[index]
+    } else {
+        null
+    }
+}
+
+fun <T> MutableList<T>.safeSet(index: Int?, update: (value: T) -> T): Boolean {
+    return if (index != null && index >= 0 && index <= lastIndex) {
+        this[index] = update(this[index])
+        true
+    } else {
+        false
     }
 }
