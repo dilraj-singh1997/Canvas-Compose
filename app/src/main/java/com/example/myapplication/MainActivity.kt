@@ -145,18 +145,17 @@ fun Screen() {
         }
 
         LaunchedEffect(true) {
-            for (_item in channelState) {
+            for (item in channelState) {
                 job?.cancel()
                 job = launch {
                     withContext(Dispatchers.IO) {
-                        val item = _item.toMutableList()
                         while (true) {
                             delay(15)
                             val iter = item.iterator()
                             var i = 0
                             val removal = mutableListOf<ItemState>()
                             while (iter.hasNext()) {
-                                val ele = iter.next()
+                                iter.next()
                                 item.safeSet(i) { it.copy(y = it.y - 10) }
                                 if (item[i].y <= 0) {
                                     removal.add(item[i])
