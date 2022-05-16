@@ -77,6 +77,8 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -112,7 +114,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Screen() {
 
-    var hearts by remember {
+    val hearts = remember {
         mutableStateOf<List<ItemState>>(mutableListOf())
     }
 
@@ -124,50 +126,72 @@ fun Screen() {
                 .padding(bottom = 36.dp),
             horizontalPadding = 24,
             bottomMargin = 110,
-            items = hearts
+            items = hearts.value
         )
 
         val width = with (LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
         val height = with (LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-
-        val listSize = remember {
-            derivedStateOf {
-                hearts.size
-            }
-        }
 
         val channel = remember {
             Channel<ItemState>(Channel.UNLIMITED)
         }
 
         val channelState = remember {
-            Channel<List<ItemState>>(Channel.UNLIMITED)
+            Channel<MutableList<ItemState>>(Channel.UNLIMITED)
+        }
+
+        var job: Job? = remember {
+            null
         }
 
         LaunchedEffect(true) {
-            for (item in channelState) {
-                hearts = item
+            for (_item in channelState) {
+                job?.cancel()
+                job = launch {
+                    withContext(Dispatchers.IO) {
+                        val item = _item.toMutableList()
+                        while (true) {
+                            delay(15)
+                            val iter = item.iterator()
+                            var i = 0
+                            val removal = mutableListOf<ItemState>()
+                            while (iter.hasNext()) {
+                                val ele = iter.next()
+                                item.safeSet(i) { it.copy(y = it.y - 10) }
+                                if (item[i].y <= 0) {
+                                    removal.add(item[i])
+                                }
+                                i++
+                            }
+                            item.removeAll(removal)
+                            Log.d("dilraj", "setting item $item ${hearts.value.hashCode()} ${item.hashCode()}")
+                            hearts.value = item.toMutableList()
+                            if (hearts.value.isEmpty()) {
+                                cancel()
+                            }
+                        }
+                    }
+                }
             }
         }
 
         LaunchedEffect(true) {
             for (_item in channel) {
-                val index = hearts.size
-                channelState.trySend(hearts.toMutableList().apply {
+                channelState.trySend(hearts.value.toMutableList().apply {
                     add(_item)
                 })
-                launch {
-                    withContext(Dispatchers.IO) {
-                        var item = _item
-                        while (item.y > 0) {
-                            delay(16)
-                            channelState.trySend(hearts.toMutableList().apply {
-                                safeSet(index, { item.copy(y = item.y - 10) })
-                            })
-                            item = item.copy(y = item.y - 10)
-                        }
-                    }
-                }
+//                launch {
+//                    withContext(Dispatchers.IO) {
+//                        var item = _item
+//                        while (item.y > 0) {
+//                            delay(16)
+//                            channelState.trySend(hearts.toMutableList().apply {
+//                                safeSet(index) { item.copy(y = item.y - 10) }
+//                            })
+//                            item = item.copy(y = item.y - 10)
+//                        }
+//                    }
+//                }
             }
         }
 
@@ -225,6 +249,7 @@ enum class HeartState {
 
 @Composable
 fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
+    Log.d("dilraj", "recomposing canvas")
     val width = LocalConfiguration.current.screenWidthDp
     val height = LocalConfiguration.current.screenHeightDp
 
@@ -267,7 +292,7 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                 val path = Path().apply {
                     heartPath(Size(120f, 120f))
                 }
-                Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
+//                Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
                         drawText("hello\uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
