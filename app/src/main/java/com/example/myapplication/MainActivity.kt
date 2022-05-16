@@ -112,8 +112,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Screen() {
 
-    val hearts = remember {
-        mutableStateListOf<ItemState>()
+    var hearts by remember {
+        mutableStateOf<List<ItemState>>(mutableListOf())
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -137,16 +137,34 @@ fun Screen() {
         }
 
         val channel = remember {
-            Channel<Int>(Channel.UNLIMITED)
+            Channel<ItemState>(Channel.UNLIMITED)
+        }
+
+        val channelState = remember {
+            Channel<List<ItemState>>(Channel.UNLIMITED)
         }
 
         LaunchedEffect(true) {
-            for (item in channel) {
+            for (item in channelState) {
+                hearts = item
+            }
+        }
+
+        LaunchedEffect(true) {
+            for (_item in channel) {
+                val index = hearts.size
+                channelState.trySend(hearts.toMutableList().apply {
+                    add(_item)
+                })
                 launch {
                     withContext(Dispatchers.IO) {
-                        while (hearts[item].y > 0) {
-                            delay(100)
-                            hearts[item] = hearts[item].copy(y = hearts[item].y - 10)
+                        var item = _item
+                        while (item.y > 0) {
+                            delay(16)
+                            channelState.trySend(hearts.toMutableList().apply {
+                                safeSet(index, { item.copy(y = item.y - 10) })
+                            })
+                            item = item.copy(y = item.y - 10)
                         }
                     }
                 }
@@ -178,9 +196,7 @@ fun Screen() {
 
         Button(
             onClick = {
-                val idx = hearts.size
-                hearts.add(ItemState(x = Random.nextInt(0, (width).toInt()).toFloat(), y = Random.nextInt(0, (height).toInt()).toFloat()))
-                channel.trySend(idx)
+                channel.trySend(ItemState(x = Random.nextInt(0, (width).toInt()).toFloat(), y = Random.nextInt(0, (height).toInt()).toFloat()))
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
