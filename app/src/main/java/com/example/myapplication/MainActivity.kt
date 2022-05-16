@@ -180,43 +180,8 @@ fun Screen() {
                 channelState.trySend(hearts.value.toMutableList().apply {
                     add(_item)
                 })
-//                launch {
-//                    withContext(Dispatchers.IO) {
-//                        var item = _item
-//                        while (item.y > 0) {
-//                            delay(16)
-//                            channelState.trySend(hearts.toMutableList().apply {
-//                                safeSet(index) { item.copy(y = item.y - 10) }
-//                            })
-//                            item = item.copy(y = item.y - 10)
-//                        }
-//                    }
-//                }
             }
         }
-
-//        LaunchedEffect(true) {
-//            snapshotFlow { listSize.value }.flowOn(Dispatchers.Default).collectLatest {
-//
-//                val ctx = suspendCancellableCoroutine<Unit> {
-//                    while (hearts.isNotEmpty()) {
-//                        val iter = hearts.iterator()
-//                        var c = 0
-//                        while (iter.hasNext()) {
-//                            hearts.safeSet(c) {
-//                                it.copy(y = it.y - 1)
-//                            }
-//                            c++
-//                        }
-//
-//                    }
-//                }
-//            }
-//
-//            while (true) {
-//
-//            }
-//        }
 
         Button(
             onClick = {
@@ -242,49 +207,9 @@ data class ItemState(
     val y: Float
 )
 
-enum class HeartState {
-    Show,
-    Hide
-}
-
 @Composable
 fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
     Log.d("dilraj", "recomposing canvas")
-    val width = LocalConfiguration.current.screenWidthDp
-    val height = LocalConfiguration.current.screenHeightDp
-
-    val yRandom = 0//Random.nextInt(0, height / 2)
-    val xRandom = Random.nextInt(horizontalPadding, (width - horizontalPadding))
-
-    val heartState = remember {
-        mutableStateOf(HeartState.Show)
-    }
-
-    val density = LocalDensity.current
-
-    val offsetYAnimation: Float by animateFloatAsState(
-        when (heartState.value) {
-            HeartState.Show -> with(density) { height.dp.toPx() }
-            else -> with(density) { yRandom.dp.toPx() }
-        }
-,
-        animationSpec = tween(1000)
-    )
-
-    val offsetXAnimation: Dp by animateDpAsState(
-        targetValue = when (heartState.value) {
-            HeartState.Show -> (((width - (horizontalPadding * 2)) / 2) + 8).dp
-            else -> xRandom.dp
-        },
-        animationSpec = tween(1000)
-    )
-
-    LaunchedEffect(key1 = heartState, block = {
-        heartState.value = when (heartState.value) {
-            HeartState.Show -> HeartState.Hide
-            HeartState.Hide -> HeartState.Show
-        }
-    })
 
     Canvas(modifier = modifier,
         onDraw = {
@@ -292,10 +217,9 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                 val path = Path().apply {
                     heartPath(Size(120f, 120f))
                 }
-//                Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
-                        drawText("hello\uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
+                        drawText("hello \uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
                             color = android.graphics.Color.GREEN
                             isAntiAlias = true
                             textSize = 124f
