@@ -5,10 +5,13 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Parcel
 import android.os.Parcelable
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,8 +61,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -101,7 +106,7 @@ fun Screen() {
         repeat(heartCount) {
             Heart(
                 modifier = Modifier
-//                    .fillMaxSize()
+                    .fillMaxSize()
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 36.dp),
                 horizontalPadding = 24,
@@ -134,22 +139,25 @@ enum class HeartState {
 }
 
 @Composable
-fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int) {
+fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<Int> = listOf()) {
     val width = LocalConfiguration.current.screenWidthDp
-    val height = LocalConfiguration.current.screenHeightDp - bottomMargin
+    val height = LocalConfiguration.current.screenHeightDp
 
-    val yRandom = Random.nextInt(0, height / 2)
+    val yRandom = 0//Random.nextInt(0, height / 2)
     val xRandom = Random.nextInt(horizontalPadding, (width - horizontalPadding))
 
     val heartState = remember {
         mutableStateOf(HeartState.Show)
     }
 
-    val offsetYAnimation: Dp by animateDpAsState(
-        targetValue = when (heartState.value) {
-            HeartState.Show -> height.dp
-            else -> yRandom.dp
-        },
+    val density = LocalDensity.current
+
+    val offsetYAnimation: Float by animateFloatAsState(
+        when (heartState.value) {
+            HeartState.Show -> with(density) { height.dp.toPx() }
+            else -> with(density) { yRandom.dp.toPx() }
+        }
+,
         animationSpec = tween(1000)
     )
 
@@ -168,17 +176,13 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int) {
         }
     })
 
-    AnimatedVisibility(
-        visible = heartState.value == HeartState.Show,
-        enter = fadeIn(animationSpec = tween(durationMillis = 250)),
-        exit = fadeOut(animationSpec = tween(durationMillis = 700))
-    ) {
-        Canvas(modifier = modifier.background(Color.Green)
-            .offset(y = offsetYAnimation, x = offsetXAnimation),
-            onDraw = {
-                val path = Path().apply {
-                    heartPath(Size(120f, 120f))
-                }
+    Canvas(modifier = modifier,
+        onDraw = {
+            val path = Path().apply {
+                heartPath(Size(120f, 120f))
+            }
+            Log.d("dilraj", "${offsetYAnimation} -- ${heartState.value}")
+            translate(top = offsetYAnimation) {
                 drawContext.canvas.nativeCanvas.apply {
                     drawText("hello\uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
                         color = android.graphics.Color.GREEN
@@ -192,8 +196,8 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int) {
                     color = Color.Red,
                 )
             }
-        )
-    }
+        }
+    )
 }
 
 @Composable
