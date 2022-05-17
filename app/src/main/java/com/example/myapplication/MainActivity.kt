@@ -150,7 +150,7 @@ fun Screen() {
                 job = launch {
                     withContext(Dispatchers.IO) {
                         while (true) {
-                            delay(15)
+                            delay(10)
                             val iter = item.iterator()
                             var i = 0
                             val removal = mutableListOf<ItemState>()
@@ -176,9 +176,11 @@ fun Screen() {
 
         LaunchedEffect(true) {
             for (_item in channel) {
-                channelState.trySend(hearts.value.toMutableList().apply {
-                    add(_item)
-                })
+                launch() {
+                    channelState.trySend(hearts.value.toMutableList().apply {
+                        add(_item)
+                    })
+                }
             }
         }
 
