@@ -9,9 +9,25 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VectorizedSpringSpec
+import androidx.compose.animation.core.VectorizedTweenSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.getVelocityFromNanos
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,6 +55,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.Button
 import androidx.compose.material.Icon
+import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
@@ -50,12 +67,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -81,10 +102,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -133,7 +157,7 @@ fun Screen() {
         val height = with (LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
 
         val channel = remember {
-            Channel<ItemState>(Channel.UNLIMITED)
+            Channel<List<ItemState>>(Channel.UNLIMITED)
         }
 
         val channelState = remember {
@@ -144,29 +168,63 @@ fun Screen() {
             null
         }
 
+        val x = animateDpAsState(targetValue = 1.dp, animationSpec = tween(1))
+        var playTime by remember { mutableStateOf(0L) }
+
+        LaunchedEffect(true) {
+            val x = Animatable(initialValue = 0.0f)
+            val y = TargetBasedAnimation(
+                animationSpec = tween(5500, easing = LinearEasing),
+                typeConverter = Float.VectorConverter,
+                initialValue = 0f,
+                targetValue = height
+            )
+//            val y = VectorizedSpringSpec<AnimationVector1D>(dampingRatio = Spring.DampingRatioHighBouncy)
+//            val y = VectorizedTweenSpec<AnimationVector1D>(durationMillis = 1000, delayMillis = 0, easing = FastOutSlowInEasing)
+
+            var time = 0L
+            val startTime = System.nanoTime()
+
+            while (x.value <= 100f) {
+                time += 100
+                playTime = System.nanoTime() - startTime
+                val z = ((x.value) * 5500_000_000).toLong()
+//                Log.d("dilraj", "${y.durationNanos} time = $time, time*1000 = ${z}, playTime = $playTime, x = ${x.value}, y = ${y.getValueFromNanos(
+//                    playTimeNanos = playTime
+//                )}")
+                x.animateTo(x.value + 0.1f)
+                delay(100)
+            }
+        }
+        val frameTime = remember { mutableStateOf(0L) }
+
         LaunchedEffect(true) {
             for (item in channelState) {
                 job?.cancel()
                 job = launch {
                     withContext(Dispatchers.IO) {
                         while (true) {
-                            delay(10)
-                            val iter = item.iterator()
-                            var i = 0
-                            val removal = mutableListOf<ItemState>()
-                            while (iter.hasNext()) {
-                                iter.next()
-                                item.safeSet(i) { it.copy(y = it.y - 10) }
-                                if (item[i].y <= 0) {
-                                    removal.add(item[i])
+                            withFrameMillis {
+                                val iter = item.iterator()
+                                val removal = mutableListOf<ItemState>()
+                                iter.forEachIndexed { index, itemState ->
+                                    val counter = ((System.nanoTime() - itemState.time)).toLong()
+                                    val ticker = itemState.animation.getValueFromNanos(counter.toLong())
+                                    Log.d("dilraj", "duration = ${itemState.animation.durationNanos}, ticker = $ticker, counter = $counter, current time = ${System.currentTimeMillis()}")
+                                    item.safeSet(index) {
+                                        it.copy(y = ticker,
+                                            alpha = (it.alpha - 0.005f).coerceAtLeast(0.01f))
+                                    }
+                                    if (itemState.y <= 0) {
+                                        removal.add(itemState)
+                                    }
                                 }
-                                i++
-                            }
-                            item.removeAll(removal)
-                            Log.d("dilraj", "setting item $item ${hearts.value.hashCode()} ${item.hashCode()}")
-                            hearts.value = item.toMutableList()
-                            if (hearts.value.isEmpty()) {
-                                cancel()
+                                item.removeAll(removal)
+                                Log.d("dilraj", "setting item $item")
+                                hearts.value = item.toMutableList()
+                                if (hearts.value.isEmpty()) {
+                                    cancel()
+                                }
                             }
                         }
                     }
@@ -178,7 +236,7 @@ fun Screen() {
             for (_item in channel) {
                 launch() {
                     channelState.trySend(hearts.value.toMutableList().apply {
-                        add(_item)
+                        addAll(_item)
                     })
                 }
             }
@@ -186,7 +244,23 @@ fun Screen() {
 
         Button(
             onClick = {
-                channel.trySend(ItemState(x = Random.nextInt(0, (width).toInt()).toFloat(), y = Random.nextInt(0, (height).toInt()).toFloat()))
+                channel.trySend(List(1) {
+                    ItemState(
+                        x = Random.nextInt(0, (width).toInt()).toFloat(),
+                        y = (height - 200f)//Random.nextInt(0, (height).toInt()).toFloat()
+                        ,
+                        animation = TargetBasedAnimation(
+                            animationSpec =
+                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
+                            tween(durationMillis = 5500, easing = FastOutSlowInEasing)
+                            ,
+                            typeConverter = Float.VectorConverter,
+                            initialValue = height,
+                            targetValue = height/2
+                        )
+                    )
+                }
+                )
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -202,16 +276,25 @@ fun Screen() {
 
     }
 }
-
+// 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
 data class ItemState(
     val x: Float,
-    val y: Float
+    val y: Float,
+    val alpha: Float = 1.0f,
+    val animation: TargetBasedAnimation<Float, AnimationVector1D> = TargetBasedAnimation(
+        animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+        typeConverter = Float.VectorConverter,
+        initialValue = 0f,
+        targetValue = 1f
+    ),
+    val time: Long = System.nanoTime()
 )
 
 @Composable
 fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
     Log.d("dilraj", "recomposing canvas")
 
+    //TODO- rawBehind {  } check once
     Canvas(modifier = modifier,
         onDraw = {
             for (item in items) {
@@ -220,16 +303,17 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                 }
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
-                        drawText("hello \uD83D\uDE0A", 0f, 0f, android.graphics.Paint().apply {
+                        drawText("\uD83D\uDD25 canvas \uD83D\uDD25", 0f, 0f, android.graphics.Paint().apply {
                             color = android.graphics.Color.GREEN
                             isAntiAlias = true
                             textSize = 124f
+                            alpha = (item.alpha * 255).toInt()
                             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         })
                     }
                     drawPath(
                         path = path,
-                        color = Color.Red,
+                        color = Color.Red.copy(alpha = item.alpha),
                     )
                 }
             }
@@ -507,5 +591,13 @@ fun <T> MutableList<T>.safeSet(index: Int?, update: (value: T) -> T): Boolean {
         true
     } else {
         false
+    }
+}
+
+fun <T> Iterator<T>.forEachIndexed(block: (Int, T) -> Unit) {
+    var index = 0
+    while (hasNext()) {
+        block(index, next())
+        index++
     }
 }
