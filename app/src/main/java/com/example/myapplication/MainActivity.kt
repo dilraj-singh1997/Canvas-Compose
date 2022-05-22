@@ -1,36 +1,33 @@
 package com.example.myapplication
 
 import android.annotation.SuppressLint
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Bundle
-import android.os.Parcel
-import android.os.Parcelable
+import android.text.TextPaint
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Animation
+import androidx.compose.animation.core.AnimationConstants
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.DurationBasedAnimationSpec
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.VectorizedSpringSpec
-import androidx.compose.animation.core.VectorizedTweenSpec
-import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.VectorizedAnimationSpec
+import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
+import androidx.compose.animation.core.VectorizedFloatAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.getVelocityFromNanos
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,9 +40,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -55,41 +50,34 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.Button
 import androidx.compose.material.Icon
-import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.compose.type_safe_args.annotation.ArgumentProvider
 import com.compose.type_safe_args.annotation.ComposeDestination
@@ -102,18 +90,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.Serializable
-import java.lang.Exception
+import java.util.*
+import kotlin.math.sin
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
@@ -153,8 +135,10 @@ fun Screen() {
             items = hearts.value
         )
 
-        val width = with (LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-        val height = with (LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+        val width =
+            with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+        val height =
+            with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
 
         val channel = remember {
             Channel<List<ItemState>>(Channel.UNLIMITED)
@@ -196,35 +180,51 @@ fun Screen() {
                 delay(100)
             }
         }
-        val frameTime = remember { mutableStateOf(0L) }
+
+        var counter by remember {
+            mutableStateOf(0)
+        }
 
         LaunchedEffect(true) {
             for (item in channelState) {
                 job?.cancel()
-                job = launch {
-                    withContext(Dispatchers.IO) {
-                        while (true) {
-                            withFrameMillis {
-                                val iter = item.iterator()
-                                val removal = mutableListOf<ItemState>()
-                                iter.forEachIndexed { index, itemState ->
-                                    val counter = ((System.nanoTime() - itemState.time)).toLong()
-                                    val ticker = itemState.animation.getValueFromNanos(counter.toLong())
-                                    Log.d("dilraj", "duration = ${itemState.animation.durationNanos}, ticker = $ticker, counter = $counter, current time = ${System.currentTimeMillis()}")
-                                    item.safeSet(index) {
-                                        it.copy(y = ticker,
-                                            alpha = (it.alpha - 0.005f).coerceAtLeast(0.01f))
-                                    }
-                                    if (itemState.y <= 0) {
-                                        removal.add(itemState)
-                                    }
+                job = launch(Dispatchers.IO) {
+                    while (true) {
+                        withFrameMillis {
+                            val iter = item.iterator()
+                            val removal = mutableListOf<ItemState>()
+                            iter.forEachIndexed { index, itemState ->
+                                val counter = ((System.nanoTime() - itemState.time)).toLong()
+                                val yTicker =
+                                    itemState.yAnimation.getValueFromNanos(counter.toLong())
+                                val xTicker =
+                                    itemState.xAnimation.getValueFromNanos(counter.toLong())
+                                val alphaTicker =
+                                    itemState.alphaAnimation.getValueFromNanos(counter)
+                                val angleTicker =
+                                    itemState.angleAnimation.getValueFromNanos(counter)
+                                Log.d("dilraj",
+                                    "duration = ${itemState.yAnimation.durationNanos}, ticker = $yTicker, counter = $counter, current time = ${System.currentTimeMillis()}")
+                                Log.d("dilraj", "itemState = $itemState")
+                                item.safeSet(index) {
+                                    it.copy(
+                                        x = xTicker,
+                                        y = yTicker,
+                                        alpha = (alphaTicker).coerceAtLeast(0.01f),
+                                        angle = angleTicker
+                                    )
                                 }
-                                item.removeAll(removal)
-                                Log.d("dilraj", "setting item $item")
-                                hearts.value = item.toMutableList()
-                                if (hearts.value.isEmpty()) {
-                                    cancel()
+                                if (itemState.y <= 0 || itemState.alpha < 0.05f) {
+                                    Log.d("dilraj", "adding removal items ${itemState}")
+                                    removal.add(itemState)
                                 }
+                            }
+                            item.removeAll {
+                                removal.any { removed -> removed.id == it.id }
+                            }
+                            hearts.value = item.toMutableList()
+                            if (hearts.value.isEmpty()) {
+                                cancel()
                             }
                         }
                     }
@@ -233,8 +233,8 @@ fun Screen() {
         }
 
         LaunchedEffect(true) {
-            for (_item in channel) {
-                launch() {
+            launch(Dispatchers.IO) {
+                for (_item in channel) {
                     channelState.trySend(hearts.value.toMutableList().apply {
                         addAll(_item)
                     })
@@ -247,17 +247,38 @@ fun Screen() {
                 channel.trySend(List(1) {
                     ItemState(
                         x = Random.nextInt(0, (width).toInt()).toFloat(),
-                        y = (height - 200f)//Random.nextInt(0, (height).toInt()).toFloat()
-                        ,
-                        animation = TargetBasedAnimation(
+                        y = (height - 200f),//Random.nextInt(0, (height).toInt()).toFloat()
+                        xAnimation =
+                        SinWaveAnimation<AnimationVector1D>(
+                            animationSpec = SinWaveTweenSpec<Float>(durationMillis = 3500),
+                            typeConverter = Float.VectorConverter,
+                            initialValue = Random.nextInt(0, (width).toInt()).toFloat(),
+                        ),
+                        yAnimation = TargetBasedAnimation(
                             animationSpec =
                             //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
-                            tween(durationMillis = 5500, easing = FastOutSlowInEasing)
-                            ,
+                            tween(durationMillis = 3500, easing = FastOutSlowInEasing),
                             typeConverter = Float.VectorConverter,
                             initialValue = height,
-                            targetValue = height/2
-                        )
+                            targetValue = height / 2
+                        ),
+                        alphaAnimation = TargetBasedAnimation(
+                            animationSpec =
+                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
+                            tween(durationMillis = 5500, easing = LinearEasing),
+                            typeConverter = Float.VectorConverter,
+                            initialValue = 1f,
+                            targetValue = 0f
+                        ),
+                        angle = 0f,
+                        angleAnimation = TargetBasedAnimation(
+                            animationSpec =
+                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
+                            tween(durationMillis = 2500, easing = FastOutSlowInEasing),
+                            typeConverter = Float.VectorConverter,
+                            initialValue = 0f,
+                            targetValue = 1440f
+                        ),
                     )
                 }
                 )
@@ -276,25 +297,215 @@ fun Screen() {
 
     }
 }
+
 // 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
 data class ItemState(
+    val id: String = UUID.randomUUID().toString(),
     val x: Float,
     val y: Float,
     val alpha: Float = 1.0f,
-    val animation: TargetBasedAnimation<Float, AnimationVector1D> = TargetBasedAnimation(
+    val xAnimation: Animation<Float, AnimationVector1D>,
+    val yAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
         animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
         typeConverter = Float.VectorConverter,
         initialValue = 0f,
         targetValue = 1f
     ),
-    val time: Long = System.nanoTime()
+    val alphaAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
+        animationSpec = tween(durationMillis = 1500, easing = LinearEasing),
+        typeConverter = Float.VectorConverter,
+        initialValue = 1f,
+        targetValue = 0f
+    ),
+    val angle: Float,
+    val angleAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
+        animationSpec = tween(durationMillis = 1500, easing = LinearEasing),
+        typeConverter = Float.VectorConverter,
+        initialValue = 1f,
+        targetValue = 0f
+    ),
+    val time: Long = System.nanoTime(),
 )
+
+class SinWaveAnimation<V : AnimationVector> private constructor(
+    val animationSpec: VectorizedAnimationSpec<V>,
+    override val typeConverter: TwoWayConverter<Float, V>,
+    val initialValue: Float,
+    override val targetValue: Float,
+    initialVelocityVector: V? = null,
+) : Animation<Float, V> {
+
+    constructor(
+        animationSpec: AnimationSpec<Float>,
+        typeConverter: TwoWayConverter<Float, V>,
+        initialValue: Float,
+        initialVelocityVector: V? = null,
+    ) : this(
+        animationSpec.vectorize(typeConverter),
+        typeConverter,
+        initialValue,
+        initialValue,
+        initialVelocityVector
+    )
+
+    private val initialValueVector = typeConverter.convertToVector(initialValue)
+    private val targetValueVector = typeConverter.convertToVector(targetValue)
+    private val initialVelocityVector =
+        initialVelocityVector ?: typeConverter.convertToVector(initialValue)
+
+    override val isInfinite: Boolean get() = animationSpec.isInfinite
+    override fun getValueFromNanos(playTimeNanos: Long): Float {
+        return if (!isFinishedFromNanos(playTimeNanos)) {
+            initialValue + typeConverter.convertFromVector(
+                animationSpec.getValueFromNanos(
+                    playTimeNanos, initialValueVector,
+                    targetValueVector, initialVelocityVector
+                )
+            )
+        } else {
+            targetValue
+        }
+    }
+
+    @get:Suppress("MethodNameUnits")
+    override val durationNanos: Long = animationSpec.getDurationNanos(
+        initialValue = initialValueVector,
+        targetValue = targetValueVector,
+        initialVelocity = this.initialVelocityVector
+    )
+
+    private val endVelocity = animationSpec.getEndVelocity(
+        initialValueVector,
+        targetValueVector,
+        this.initialVelocityVector
+    )
+
+    override fun getVelocityVectorFromNanos(playTimeNanos: Long): V {
+        return if (!isFinishedFromNanos(playTimeNanos)) {
+            animationSpec.getVelocityFromNanos(
+                playTimeNanos,
+                initialValueVector,
+                targetValueVector,
+                initialVelocityVector
+            )
+        } else {
+            endVelocity
+        }
+    }
+
+    override fun toString(): String {
+        return "TargetBasedAnimation: $initialValue -> $targetValue," +
+                "initial velocity: $initialVelocityVector, duration: $durationMillis ms"
+    }
+}
+
+val Animation<*, *>.durationMillis: Long
+    get() = durationNanos / MillisToNanos
+
+@Immutable
+class SinWaveTweenSpec<T>(
+    val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
+    val delay: Int = 0,
+    val easing: Easing = FastOutSlowInEasing,
+) : DurationBasedAnimationSpec<T> {
+
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<T, V>) =
+        SinWaveSpec<V>(durationMillis, delay, easing)
+
+    override fun equals(other: Any?): Boolean =
+        if (other is TweenSpec<*>) {
+            other.durationMillis == this.durationMillis &&
+                    other.delay == this.delay &&
+                    other.easing == this.easing
+        } else {
+            false
+        }
+
+    override fun hashCode(): Int {
+        return (durationMillis * 31 + easing.hashCode()) * 31 + delay
+    }
+}
+
+class SinWaveSpec<V : AnimationVector>(
+    override val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
+    override val delayMillis: Int = 0,
+    val easing: Easing = FastOutSlowInEasing,
+) : VectorizedDurationBasedAnimationSpec<V> {
+
+    private val anim = VectorizedFloatAnimationSpec<V>(
+        SinWaveInterpolater(durationMillis, delayMillis, easing)
+    )
+
+    override fun getValueFromNanos(
+        playTimeNanos: Long,
+        initialValue: V,
+        targetValue: V,
+        initialVelocity: V,
+    ): V {
+        return anim.getValueFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+    }
+
+    override fun getVelocityFromNanos(
+        playTimeNanos: Long,
+        initialValue: V,
+        targetValue: V,
+        initialVelocity: V,
+    ): V {
+        return anim.getVelocityFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+    }
+}
+
+val MillisToNanos: Long = 1_000_000L
+
+class SinWaveInterpolater(
+    val duration: Int = AnimationConstants.DefaultDurationMillis,
+    val delay: Int = 0,
+    private val easing: Easing = FastOutSlowInEasing,
+) : FloatAnimationSpec {
+
+    override fun getValueFromNanos(
+        playTimeNanos: Long,
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Float {
+        // TODO: Properly support Nanos in the impl
+        val playTimeMillis = playTimeNanos / 1_000_000L
+        val clampedPlayTime = clampPlayTime(playTimeMillis)
+        val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
+        val fraction = easing.transform(rawFraction.coerceIn(0f, 1f))
+        Log.d("dilraj", "cos value is ${sin(fraction * 2 * Math.PI).toFloat()}")
+        return 100 * (sin(fraction * 2 * Math.PI).toFloat())
+    }
+
+    private fun clampPlayTime(playTime: Long): Long {
+        return (playTime - delay).coerceIn(0, duration.toLong())
+    }
+
+    override fun getDurationNanos(
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Long {
+        return (delay + duration) * 1_000_000L
+    }
+
+    override fun getVelocityFromNanos(
+        playTimeNanos: Long,
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Float {
+        return 0f
+    }
+}
+
 
 @Composable
 fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
     Log.d("dilraj", "recomposing canvas")
 
-    //TODO- rawBehind {  } check once
+    //TODO- drawBehind {  } check once
     Canvas(modifier = modifier,
         onDraw = {
             for (item in items) {
@@ -303,18 +514,48 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                 }
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
-                        drawText("\uD83D\uDD25 canvas \uD83D\uDD25", 0f, 0f, android.graphics.Paint().apply {
+                        val textPaint = TextPaint().apply {
+                            color = android.graphics.Color.WHITE
+                            isAntiAlias = true
+                            textSize = 48f
+                            alpha = (item.alpha * 255).toInt()
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        }
+
+                        val ePaint = TextPaint().apply {
                             color = android.graphics.Color.GREEN
                             isAntiAlias = true
                             textSize = 124f
                             alpha = (item.alpha * 255).toInt()
-                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                        })
+//                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        }
+
+                        val text = "@ayushnasa"
+                        val emoji =
+                            //"\uD83D\uDD34"
+                            "\uD83D\uDD25"
+                        drawText(text, 0f, 0f, textPaint)
+
+                        val bounds = Rect()
+                        textPaint.getTextBounds(text, 0, text.length, bounds)
+
+                        val eBounds = Rect()
+                        ePaint.getTextBounds(emoji, 0, emoji.length, eBounds)
+
+                        drawText(emoji,
+                            (bounds.width() - eBounds.width()) / 2f,
+                            (textPaint.textSize) * 1f,
+                            ePaint)
                     }
-                    drawPath(
-                        path = path,
-                        color = Color.Red.copy(alpha = item.alpha),
-                    )
+//                    rotate(item.angle, pivot = Offset(
+//                        x = (120f / 2),
+//                        y = (120f / 2)
+//                    )) {
+//                        drawPath(
+//                            path = path,
+//                            color = Color.Red.copy(alpha = item.alpha),
+//                        )
+//                    }
                 }
             }
         }
@@ -480,32 +721,32 @@ fun SubTopics() {
     }
 }
 
-enum class T : Parcelable {
-    A,
-    B;
-
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeInt(this.ordinal)
-    }
-
-    override fun describeContents(): Int {
-        return 0
-    }
-
-    companion object CREATOR : Parcelable.Creator<T> {
-        override fun createFromParcel(parcel: Parcel): T {
-            return when (parcel.readInt()) {
-                0 -> A
-                else -> B
-            }
-        }
-
-        override fun newArray(size: Int): Array<T?> {
-            return arrayOfNulls(size)
-        }
-    }
-}
-
+//enum class T : Parcelable {
+//    A,
+//    B;
+//
+//    override fun writeToParcel(parcel: Parcel, flags: Int) {
+//        parcel.writeInt(this.ordinal)
+//    }
+//
+//    override fun describeContents(): Int {
+//        return 0
+//    }
+//
+//    companion object CREATOR : Parcelable.Creator<T> {
+//        override fun createFromParcel(parcel: Parcel): T {
+//            return when (parcel.readInt()) {
+//                0 -> A
+//                else -> B
+//            }
+//        }
+//
+//        override fun newArray(size: Int): Array<T?> {
+//            return arrayOfNulls(size)
+//        }
+//    }
+//}
+//
 @Composable
 fun Greeting(name: String) {
     Text(text = "Hello $name!")

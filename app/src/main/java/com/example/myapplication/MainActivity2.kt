@@ -10,6 +10,6 @@ class MainActivity2 : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        println(intent?.extras?.getParcelable<Bundle>("tt")?.getParcelable<T>("tt2")?.name ?: "no value")
+//        println(intent?.extras?.getParcelable<Bundle>("tt")?.getParcelable<T>("tt2")?.name ?: "no value")
     }
 }
