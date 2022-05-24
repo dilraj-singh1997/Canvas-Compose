@@ -73,6 +73,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
@@ -92,7 +93,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.Serializable
 import java.util.*
 import kotlin.math.sin
@@ -181,10 +181,6 @@ fun Screen() {
             }
         }
 
-        var counter by remember {
-            mutableStateOf(0)
-        }
-
         LaunchedEffect(true) {
             for (item in channelState) {
                 job?.cancel()
@@ -194,18 +190,15 @@ fun Screen() {
                             val iter = item.iterator()
                             val removal = mutableListOf<ItemState>()
                             iter.forEachIndexed { index, itemState ->
-                                val counter = ((System.nanoTime() - itemState.time)).toLong()
+                                val counter = System.nanoTime() - itemState.time
                                 val yTicker =
-                                    itemState.yAnimation.getValueFromNanos(counter.toLong())
+                                    itemState.yAnimation.getValueFromNanos(counter)
                                 val xTicker =
-                                    itemState.xAnimation.getValueFromNanos(counter.toLong())
+                                    itemState.xAnimation.getValueFromNanos(counter)
                                 val alphaTicker =
                                     itemState.alphaAnimation.getValueFromNanos(counter)
                                 val angleTicker =
                                     itemState.angleAnimation.getValueFromNanos(counter)
-                                Log.d("dilraj",
-                                    "duration = ${itemState.yAnimation.durationNanos}, ticker = $yTicker, counter = $counter, current time = ${System.currentTimeMillis()}")
-                                Log.d("dilraj", "itemState = $itemState")
                                 item.safeSet(index) {
                                     it.copy(
                                         x = xTicker,
@@ -215,7 +208,6 @@ fun Screen() {
                                     )
                                 }
                                 if (itemState.y <= 0 || itemState.alpha < 0.05f) {
-                                    Log.d("dilraj", "adding removal items ${itemState}")
                                     removal.add(itemState)
                                 }
                             }
@@ -469,7 +461,6 @@ class SinWaveInterpolater(
         targetValue: Float,
         initialVelocity: Float,
     ): Float {
-        // TODO: Properly support Nanos in the impl
         val playTimeMillis = playTimeNanos / 1_000_000L
         val clampedPlayTime = clampPlayTime(playTimeMillis)
         val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
@@ -522,12 +513,11 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         }
 
-                        val ePaint = TextPaint().apply {
+                        val emojiPaint = TextPaint().apply {
                             color = android.graphics.Color.GREEN
                             isAntiAlias = true
                             textSize = 124f
                             alpha = (item.alpha * 255).toInt()
-//                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         }
 
                         val text = "@ayushnasa"
@@ -536,26 +526,26 @@ fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: 
                             "\uD83D\uDD25"
                         drawText(text, 0f, 0f, textPaint)
 
-                        val bounds = Rect()
-                        textPaint.getTextBounds(text, 0, text.length, bounds)
+                        val textBounds = Rect()
+                        textPaint.getTextBounds(text, 0, text.length, textBounds)
 
-                        val eBounds = Rect()
-                        ePaint.getTextBounds(emoji, 0, emoji.length, eBounds)
+                        val emojiBounds = Rect()
+                        emojiPaint.getTextBounds(emoji, 0, emoji.length, emojiBounds)
 
                         drawText(emoji,
-                            (bounds.width() - eBounds.width()) / 2f,
+                            (textBounds.width() - emojiBounds.width()) / 2f,
                             (textPaint.textSize) * 1f,
-                            ePaint)
+                            emojiPaint)
                     }
-//                    rotate(item.angle, pivot = Offset(
-//                        x = (120f / 2),
-//                        y = (120f / 2)
-//                    )) {
-//                        drawPath(
-//                            path = path,
-//                            color = Color.Red.copy(alpha = item.alpha),
-//                        )
-//                    }
+                    rotate(item.angle, pivot = Offset(
+                        x = (120f / 2),
+                        y = (120f / 2)
+                    )) {
+                        drawPath(
+                            path = path,
+                            color = Color.Red.copy(alpha = item.alpha),
+                        )
+                    }
                 }
             }
         }
