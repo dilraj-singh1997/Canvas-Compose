@@ -152,35 +152,6 @@ fun Screen() {
             null
         }
 
-        val x = animateDpAsState(targetValue = 1.dp, animationSpec = tween(1))
-        var playTime by remember { mutableStateOf(0L) }
-
-        LaunchedEffect(true) {
-            val x = Animatable(initialValue = 0.0f)
-            val y = TargetBasedAnimation(
-                animationSpec = tween(5500, easing = LinearEasing),
-                typeConverter = Float.VectorConverter,
-                initialValue = 0f,
-                targetValue = height
-            )
-//            val y = VectorizedSpringSpec<AnimationVector1D>(dampingRatio = Spring.DampingRatioHighBouncy)
-//            val y = VectorizedTweenSpec<AnimationVector1D>(durationMillis = 1000, delayMillis = 0, easing = FastOutSlowInEasing)
-
-            var time = 0L
-            val startTime = System.nanoTime()
-
-            while (x.value <= 100f) {
-                time += 100
-                playTime = System.nanoTime() - startTime
-                val z = ((x.value) * 5500_000_000).toLong()
-//                Log.d("dilraj", "${y.durationNanos} time = $time, time*1000 = ${z}, playTime = $playTime, x = ${x.value}, y = ${y.getValueFromNanos(
-//                    playTimeNanos = playTime
-//                )}")
-                x.animateTo(x.value + 0.1f)
-                delay(100)
-            }
-        }
-
         LaunchedEffect(true) {
             for (item in channelState) {
                 job?.cancel()
