@@ -8,7 +8,6 @@ import android.text.TextPaint
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Animation
 import androidx.compose.animation.core.AnimationConstants
 import androidx.compose.animation.core.AnimationSpec
@@ -26,7 +25,6 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VectorizedAnimationSpec
 import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
 import androidx.compose.animation.core.VectorizedFloatAnimationSpec
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -57,13 +55,14 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -72,7 +71,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.NativeCanvas
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
@@ -86,13 +88,7 @@ import com.compose.type_safe_args.annotation.HasDefaultValue
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.ProvideWindowInsets
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import java.io.Serializable
 import java.util.*
 import kotlin.math.sin
@@ -118,11 +114,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Screen() {
+fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
 
-    val hearts = remember {
-        mutableStateOf<List<ItemState>>(mutableListOf())
-    }
+    val items by viewModel.stateFlow.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Heart(
@@ -130,120 +124,69 @@ fun Screen() {
                 .fillMaxSize()
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 36.dp),
-            horizontalPadding = 24,
-            bottomMargin = 110,
-            items = hearts.value
+            items = items
         )
+
+        LaunchedEffect(true) {
+            while (true) {
+                withFrameNanos {
+                    viewModel.onFrameAvailable()
+                }
+            }
+        }
 
         val width =
             with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
         val height =
             with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
 
-        val channel = remember {
-            Channel<List<ItemState>>(Channel.UNLIMITED)
-        }
-
-        val channelState = remember {
-            Channel<MutableList<ItemState>>(Channel.UNLIMITED)
-        }
-
-        var job: Job? = remember {
-            null
-        }
-
-        LaunchedEffect(true) {
-            for (item in channelState) {
-                job?.cancel()
-                job = launch(Dispatchers.IO) {
-                    while (true) {
-                        withFrameMillis {
-                            val iter = item.iterator()
-                            val removal = mutableListOf<ItemState>()
-                            iter.forEachIndexed { index, itemState ->
-                                val counter = System.nanoTime() - itemState.time
-                                val yTicker =
-                                    itemState.yAnimation.getValueFromNanos(counter)
-                                val xTicker =
-                                    itemState.xAnimation.getValueFromNanos(counter)
-                                val alphaTicker =
-                                    itemState.alphaAnimation.getValueFromNanos(counter)
-                                val angleTicker =
-                                    itemState.angleAnimation.getValueFromNanos(counter)
-                                item.safeSet(index) {
-                                    it.copy(
-                                        x = xTicker,
-                                        y = yTicker,
-                                        alpha = (alphaTicker).coerceAtLeast(0.01f),
-                                        angle = angleTicker
-                                    )
-                                }
-                                if (itemState.y <= 0 || itemState.alpha < 0.05f) {
-                                    removal.add(itemState)
-                                }
-                            }
-                            item.removeAll {
-                                removal.any { removed -> removed.id == it.id }
-                            }
-                            hearts.value = item.toMutableList()
-                            if (hearts.value.isEmpty()) {
-                                cancel()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        LaunchedEffect(true) {
-            launch(Dispatchers.IO) {
-                for (_item in channel) {
-                    channelState.trySend(hearts.value.toMutableList().apply {
-                        addAll(_item)
-                    })
-                }
-            }
-        }
-
         Button(
             onClick = {
-                channel.trySend(List(1) {
-                    ItemState(
-                        x = Random.nextInt(0, (width).toInt()).toFloat(),
-                        y = (height - 200f),//Random.nextInt(0, (height).toInt()).toFloat()
-                        xAnimation =
-                        SinWaveAnimation<AnimationVector1D>(
-                            animationSpec = SinWaveTweenSpec<Float>(durationMillis = 3500),
-                            typeConverter = Float.VectorConverter,
-                            initialValue = Random.nextInt(0, (width).toInt()).toFloat(),
-                        ),
-                        yAnimation = TargetBasedAnimation(
-                            animationSpec =
-                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
-                            tween(durationMillis = 3500, easing = FastOutSlowInEasing),
-                            typeConverter = Float.VectorConverter,
-                            initialValue = height,
-                            targetValue = height / 2
-                        ),
-                        alphaAnimation = TargetBasedAnimation(
-                            animationSpec =
-                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
-                            tween(durationMillis = 5500, easing = LinearEasing),
-                            typeConverter = Float.VectorConverter,
-                            initialValue = 1f,
-                            targetValue = 0f
-                        ),
-                        angle = 0f,
-                        angleAnimation = TargetBasedAnimation(
-                            animationSpec =
-                            //spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)
-                            tween(durationMillis = 2500, easing = FastOutSlowInEasing),
-                            typeConverter = Float.VectorConverter,
-                            initialValue = 0f,
-                            targetValue = 1440f
-                        ),
-                    )
-                }
+                viewModel.sendItemClick(
+                    List(1) {
+                        ItemStateBuilder(
+                            composeCanvasDrawItem = getCustomCanvasObject(),
+                            initialX = Random.nextInt(0, (width).toInt()).toFloat(),
+                            initialY = (height - 200f),
+                        )
+                            .animateXWithAnimation(
+                                to = {
+                                    initialX
+                                },
+                                animation = {
+                                    SinWaveAnimation(
+                                        animationSpec = SinWaveTweenSpec(durationMillis = 3500),
+                                        typeConverter = Float.VectorConverter,
+                                        initialValue = Random.nextInt(0, (width).toInt()).toFloat(),
+                                    )
+                                }
+                            )
+                            .animateY(
+                                to = {
+                                    height / 2
+                                },
+                                animationSpec = {
+                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+                                }
+                            )
+                            .animateAlpha(
+                                to = {
+                                    0f
+                                },
+                                animationSpec = {
+                                    tween(durationMillis = 5500, easing = LinearEasing)
+                                }
+                            )
+                            .animateAngle(
+                                to = {
+                                    1440f
+                                },
+                                animationSpec = {
+                                    tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+                                }
+                            )
+                            .build()
+                    }
                 )
             },
             modifier = Modifier
@@ -262,7 +205,7 @@ fun Screen() {
 }
 
 // 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
-data class ItemState(
+data class ItemState constructor(
     val id: String = UUID.randomUUID().toString(),
     val x: Float,
     val y: Float,
@@ -288,7 +231,193 @@ data class ItemState(
         targetValue = 0f
     ),
     val time: Long = System.nanoTime(),
+    val itemToDraw: ComposeCanvasDrawItem,
 )
+
+sealed class ComposeCanvasDrawItem
+
+data class CanvasPath(
+    val path: android.graphics.Path,
+    val paint: android.graphics.Paint.(alpha: Float) -> Unit,
+) : ComposeCanvasDrawItem()
+
+data class CanvasText(val text: String, val paint: TextPaint.(alpha: Float) -> Unit) :
+    ComposeCanvasDrawItem()
+
+data class CanvasObject(val objectToDraw: DrawScope.(alpha: Float, angle: Float) -> Unit) :
+    ComposeCanvasDrawItem()
+
+fun getTextCanvasObject() =
+    CanvasText("hi") { alpha: Float ->
+        color = android.graphics.Color.WHITE
+        isAntiAlias = true
+        textSize = 48f
+        this.alpha = (alpha * 255).toInt()
+        typeface =
+            android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT,
+                android.graphics.Typeface.BOLD)
+    }
+
+fun getCustomCanvasObject() = CanvasObject(
+    objectToDraw = { alpha, angle ->
+        val textPaint = TextPaint().apply {
+            color = android.graphics.Color.WHITE
+            isAntiAlias = true
+            textSize = 48f
+            this.alpha = (alpha * 255).toInt()
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val emojiPaint = TextPaint().apply {
+            color = android.graphics.Color.GREEN
+            isAntiAlias = true
+            textSize = 124f
+            this.alpha = (alpha * 255).toInt()
+        }
+
+        val text = "@ayushnasa"
+        val emoji =
+            //"\uD83D\uDD34"
+            "\uD83D\uDD25"
+        drawContext.canvas.nativeCanvas.drawText(text, 0f, 0f, textPaint)
+
+        val textBounds = Rect()
+        textPaint.getTextBounds(text, 0, text.length, textBounds)
+
+        val emojiBounds = Rect()
+        emojiPaint.getTextBounds(emoji, 0, emoji.length, emojiBounds)
+
+        drawContext.canvas.nativeCanvas.drawText(emoji,
+            (textBounds.width() - emojiBounds.width()) / 2f,
+            (textPaint.textSize) * 1f,
+            emojiPaint)
+        val path = Path().apply {
+            heartPath(Size(120f, 120f))
+        }
+        rotate(
+            degrees = angle,
+            pivot = Offset(
+                x = 120f / 2,
+                y = 120f / 2
+            )
+        ) {
+            drawPath(path = path, color = Color.Red.copy(alpha = alpha))
+        }
+    }
+)
+
+class ItemStateBuilder(
+    val composeCanvasDrawItem: ComposeCanvasDrawItem,
+    val initialX: Float,
+    val initialY: Float,
+    val initialAlpha: Float = 1.0f,
+    val initialAngle: Float = 0.0f,
+) {
+    var xAnimation: Animation<Float, AnimationVector1D>? = null
+    var yAnimation: Animation<Float, AnimationVector1D>? = null
+    var alphaAnimation: Animation<Float, AnimationVector1D>? = null
+    var angleAnimation: Animation<Float, AnimationVector1D>? = null
+}
+
+fun ItemStateBuilder.build(): ItemState {
+    return ItemState(
+        id = UUID.randomUUID().toString(),
+        x = initialX,
+        y = initialY,
+        alpha = initialAlpha,
+        xAnimation = xAnimation ?: EmptyFloatAnimation(initialX),
+        yAnimation = yAnimation ?: EmptyFloatAnimation(initialY),
+        alphaAnimation = alphaAnimation ?: EmptyFloatAnimation(initialAlpha),
+        angle = initialAngle,
+        angleAnimation = angleAnimation ?: EmptyFloatAnimation(initialAngle),
+        time = System.nanoTime(),
+        itemToDraw = composeCanvasDrawItem
+    )
+}
+
+fun ItemStateBuilder.animateY(
+    to: ItemStateBuilder.() -> Float,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
+): ItemStateBuilder {
+    yAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Float.VectorConverter,
+        initialValue = initialY,
+        targetValue = to()
+    )
+    return this
+}
+
+fun ItemStateBuilder.animateX(
+    to: ItemStateBuilder.() -> Float,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
+): ItemStateBuilder {
+    xAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Float.VectorConverter,
+        initialValue = initialX,
+        targetValue = to()
+    )
+    return this
+}
+
+fun ItemStateBuilder.animateXWithAnimation(
+    to: ItemStateBuilder.() -> Float,
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    xAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateAngle(
+    to: ItemStateBuilder.() -> Float,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
+): ItemStateBuilder {
+    angleAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Float.VectorConverter,
+        initialValue = initialAngle,
+        targetValue = to()
+    )
+    return this
+}
+
+fun ItemStateBuilder.animateAlpha(
+    to: ItemStateBuilder.() -> Float,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
+): ItemStateBuilder {
+    alphaAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Float.VectorConverter,
+        initialValue = initialAlpha,
+        targetValue = to()
+    )
+    return this
+}
+
+class EmptyFloatAnimation private constructor(
+    override val targetValue: Float,
+    override val typeConverter: TwoWayConverter<Float, AnimationVector1D>,
+) : Animation<Float, AnimationVector1D> {
+
+    constructor(targetValue: Float) : this(targetValue, Float.VectorConverter)
+
+    override val isInfinite: Boolean get() = false
+    override fun getValueFromNanos(playTimeNanos: Long): Float {
+        return targetValue
+    }
+
+    @get:Suppress("MethodNameUnits")
+    override val durationNanos: Long = 0
+
+    override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
+        return typeConverter.convertToVector(targetValue)
+    }
+
+    override fun toString(): String {
+        return "EmptyFloatAnimation: $targetValue,"
+    }
+}
 
 class SinWaveAnimation<V : AnimationVector> private constructor(
     val animationSpec: VectorizedAnimationSpec<V>,
@@ -436,7 +565,6 @@ class SinWaveInterpolater(
         val clampedPlayTime = clampPlayTime(playTimeMillis)
         val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
         val fraction = easing.transform(rawFraction.coerceIn(0f, 1f))
-        Log.d("dilraj", "cos value is ${sin(fraction * 2 * Math.PI).toFloat()}")
         return 100 * (sin(fraction * 2 * Math.PI).toFloat())
     }
 
@@ -462,60 +590,34 @@ class SinWaveInterpolater(
     }
 }
 
-
 @Composable
-fun Heart(modifier: Modifier, horizontalPadding: Int, bottomMargin: Int, items: List<ItemState>) {
+fun Heart(modifier: Modifier, items: List<ItemState>) {
     Log.d("dilraj", "recomposing canvas")
 
-    //TODO- drawBehind {  } check once
     Canvas(modifier = modifier,
         onDraw = {
             for (item in items) {
-                val path = Path().apply {
-                    heartPath(Size(120f, 120f))
-                }
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
-                        val textPaint = TextPaint().apply {
-                            color = android.graphics.Color.WHITE
-                            isAntiAlias = true
-                            textSize = 48f
-                            alpha = (item.alpha * 255).toInt()
-                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        when (val itemToDraw = item.itemToDraw) {
+                            is CanvasPath -> {
+                                drawPath(
+                                    itemToDraw.path,
+                                    android.graphics.Paint().apply {
+                                        itemToDraw.paint(this, item.alpha)
+                                    }
+                                )
+                            }
+                            is CanvasText -> {
+                                val textPaint = TextPaint().apply {
+                                    itemToDraw.paint(this, item.alpha)
+                                }
+                                drawText(itemToDraw.text, 0f, 0f, textPaint)
+                            }
+                            is CanvasObject -> {
+                                itemToDraw.objectToDraw(this@translate, item.alpha, item.angle)
+                            }
                         }
-
-                        val emojiPaint = TextPaint().apply {
-                            color = android.graphics.Color.GREEN
-                            isAntiAlias = true
-                            textSize = 124f
-                            alpha = (item.alpha * 255).toInt()
-                        }
-
-                        val text = "@ayushnasa"
-                        val emoji =
-                            //"\uD83D\uDD34"
-                            "\uD83D\uDD25"
-                        drawText(text, 0f, 0f, textPaint)
-
-                        val textBounds = Rect()
-                        textPaint.getTextBounds(text, 0, text.length, textBounds)
-
-                        val emojiBounds = Rect()
-                        emojiPaint.getTextBounds(emoji, 0, emoji.length, emojiBounds)
-
-                        drawText(emoji,
-                            (textBounds.width() - emojiBounds.width()) / 2f,
-                            (textPaint.textSize) * 1f,
-                            emojiPaint)
-                    }
-                    rotate(item.angle, pivot = Offset(
-                        x = (120f / 2),
-                        y = (120f / 2)
-                    )) {
-                        drawPath(
-                            path = path,
-                            color = Color.Red.copy(alpha = item.alpha),
-                        )
                     }
                 }
             }
