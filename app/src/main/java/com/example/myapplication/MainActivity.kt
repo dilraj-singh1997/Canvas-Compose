@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.NativeCanvas
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
@@ -145,7 +146,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                 viewModel.sendItemClick(
                     List(1) {
                         ItemStateBuilder(
-                            composeCanvasDrawItem = getCustomCanvasObject(),
+                            composeCanvasDrawItem = getTextCanvasObject(),
                             initialX = Random.nextInt(0, (width).toInt()).toFloat(),
                             initialY = (height - 200f),
                         )
@@ -238,21 +239,27 @@ sealed class ComposeCanvasDrawItem
 
 data class CanvasPath(
     val path: Path,
-    val paint: (alpha: Float) -> Color,
+    val paint: Color,
 ) : ComposeCanvasDrawItem()
 
-data class CanvasText(val text: String, val paint: TextPaint.(alpha: Float) -> Unit) :
+data class CanvasText(val text: String, val paint: TextPaint.() -> Unit) :
     ComposeCanvasDrawItem()
 
 data class CanvasObject(val objectToDraw: DrawScope.(alpha: Float, angle: Float) -> Unit) :
     ComposeCanvasDrawItem()
 
+fun getPathCanvasObject() = CanvasPath(
+    path = Path().apply {
+        heartPath(Size(120f, 120f))
+    },
+    paint = Color.Red
+)
+
 fun getTextCanvasObject() =
-    CanvasText("hi") { alpha: Float ->
+    CanvasText("hi") {
         color = android.graphics.Color.WHITE
         isAntiAlias = true
         textSize = 48f
-        this.alpha = (alpha * 255).toInt()
         typeface =
             android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT,
                 android.graphics.Typeface.BOLD)
@@ -604,16 +611,34 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                     drawContext.canvas.nativeCanvas.apply {
                         when (val itemToDraw = item.itemToDraw) {
                             is CanvasPath -> {
-                                drawPath(
-                                    path = itemToDraw.path,
-                                    color = itemToDraw.paint(item.alpha)
-                                )
+                                rotate(degrees = item.angle, pivot = Offset(x = itemToDraw.path.getBounds().width / 2f, y = itemToDraw.path.getBounds().height / 2f)) {
+                                    drawPath(
+                                        path = itemToDraw.path,
+                                        color = itemToDraw.paint.copy(alpha = item.alpha)
+                                    )
+                                }
                             }
                             is CanvasText -> {
                                 val textPaint = TextPaint().apply {
-                                    itemToDraw.paint(this, item.alpha)
+                                    itemToDraw.paint(this)
+                                    alpha = (item.alpha * 255).toInt()
                                 }
-                                drawText(itemToDraw.text, 0f, 0f, textPaint)
+                                val bounds = Rect()
+                                textPaint.getTextBounds(itemToDraw.text, 0, itemToDraw.text.length, bounds)
+                                rotate(
+                                    degrees = item.angle,
+                                    pivot = Offset(
+                                        x = bounds.width() / 2f,
+                                        y = bounds.height() / 2f
+                                    )
+                                ) {
+                                    drawText(
+                                        itemToDraw.text,
+                                        0f,
+                                        bounds.height().toFloat(),
+                                        textPaint
+                                    )
+                                }
                             }
                             is CanvasObject -> {
                                 itemToDraw.objectToDraw(this@translate, item.alpha, item.angle)
