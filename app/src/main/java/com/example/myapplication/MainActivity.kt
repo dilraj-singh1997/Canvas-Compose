@@ -237,8 +237,8 @@ data class ItemState constructor(
 sealed class ComposeCanvasDrawItem
 
 data class CanvasPath(
-    val path: android.graphics.Path,
-    val paint: android.graphics.Paint.(alpha: Float) -> Unit,
+    val path: Path,
+    val paint: (alpha: Float) -> Color,
 ) : ComposeCanvasDrawItem()
 
 data class CanvasText(val text: String, val paint: TextPaint.(alpha: Float) -> Unit) :
@@ -287,10 +287,13 @@ fun getCustomCanvasObject() = CanvasObject(
         val emojiBounds = Rect()
         emojiPaint.getTextBounds(emoji, 0, emoji.length, emojiBounds)
 
-        drawContext.canvas.nativeCanvas.drawText(emoji,
+        drawContext.canvas.nativeCanvas.drawText(
+            emoji,
             (textBounds.width() - emojiBounds.width()) / 2f,
             (textPaint.textSize) * 1f,
-            emojiPaint)
+            emojiPaint
+        )
+
         val path = Path().apply {
             heartPath(Size(120f, 120f))
         }
@@ -602,10 +605,8 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                         when (val itemToDraw = item.itemToDraw) {
                             is CanvasPath -> {
                                 drawPath(
-                                    itemToDraw.path,
-                                    android.graphics.Paint().apply {
-                                        itemToDraw.paint(this, item.alpha)
-                                    }
+                                    path = itemToDraw.path,
+                                    color = itemToDraw.paint(item.alpha)
                                 )
                             }
                             is CanvasText -> {
