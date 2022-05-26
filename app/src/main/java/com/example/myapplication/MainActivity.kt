@@ -8,26 +8,22 @@ import android.text.TextPaint
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.VectorConverter
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animation
 import androidx.compose.animation.core.AnimationConstants
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.DurationBasedAnimationSpec
+import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.TargetBasedAnimation
-import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.VectorizedAnimationSpec
-import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
-import androidx.compose.animation.core.VectorizedFloatAnimationSpec
-import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.repeatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -56,7 +52,6 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -74,10 +69,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.NativeCanvas
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
@@ -153,16 +145,12 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                             initialX = Random.nextInt(0, (width).toInt()).toFloat(),
                             initialY = (height - 200f),
                         )
-                            .animateXWithAnimation(
+                            .animateX(
                                 to = {
                                     initialX
                                 },
-                                animation = {
-                                    SinWaveAnimation(
-                                        animationSpec = SinWaveTweenSpec(durationMillis = 3500),
-                                        typeConverter = Float.VectorConverter,
-                                        initialValue = Random.nextInt(0, (width).toInt()).toFloat(),
-                                    )
+                                animationSpec = {
+                                    SinWaveSpec(duration = 3500, multiplier = 100)
                                 }
                             )
                             .animateY(
@@ -170,14 +158,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                     height / 2
                                 },
                                 animationSpec = {
-                                    keyframes {
-                                        durationMillis = 3500
-                                        initialY at 0 with LinearOutSlowInEasing // for 0-15 ms
-                                        (height / 1) - 300 at 1000 with FastOutLinearInEasing // for 15-75 ms
-                                        (height / 2) + 300 at 1500 // ms
-                                        (height / 2) at 3500 // ms
-                                    }
-//                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
                                 }
                             )
                             .animateAlpha(
@@ -194,6 +175,14 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                 },
                                 animationSpec = {
                                     tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+                                }
+                            )
+                            .animateColor(
+                                to = {
+                                    Color.Green
+                                },
+                                animationSpec = {
+                                    tween(durationMillis = 2000)
                                 }
                             )
                             .build()
@@ -220,27 +209,14 @@ data class ItemState constructor(
     val id: String = UUID.randomUUID().toString(),
     val x: Float,
     val y: Float,
-    val alpha: Float = 1.0f,
+    val alpha: Float,
     val xAnimation: Animation<Float, AnimationVector1D>,
-    val yAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
-        animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
-        typeConverter = Float.VectorConverter,
-        initialValue = 0f,
-        targetValue = 1f
-    ),
-    val alphaAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
-        animationSpec = tween(durationMillis = 1500, easing = LinearEasing),
-        typeConverter = Float.VectorConverter,
-        initialValue = 1f,
-        targetValue = 0f
-    ),
+    val yAnimation: Animation<Float, AnimationVector1D>,
+    val alphaAnimation: Animation<Float, AnimationVector1D>,
     val angle: Float,
-    val angleAnimation: Animation<Float, AnimationVector1D> = TargetBasedAnimation(
-        animationSpec = tween(durationMillis = 1500, easing = LinearEasing),
-        typeConverter = Float.VectorConverter,
-        initialValue = 1f,
-        targetValue = 0f
-    ),
+    val angleAnimation: Animation<Float, AnimationVector1D>,
+    val color: Color,
+    val colorAnimation: Animation<Color, AnimationVector4D>,
     val time: Long = System.nanoTime(),
     val itemToDraw: ComposeCanvasDrawItem,
     val terminalCondition: (
@@ -258,7 +234,6 @@ sealed class ComposeCanvasDrawItem
 
 data class CanvasPath(
     val path: Path,
-    val paint: Color,
 ) : ComposeCanvasDrawItem()
 
 data class CanvasText(val text: String, val paint: TextPaint.() -> Unit) :
@@ -271,7 +246,6 @@ fun getPathCanvasObject() = CanvasPath(
     path = Path().apply {
         heartPath(Size(120f, 120f))
     },
-    paint = Color.Red
 )
 
 fun getTextCanvasObject() =
@@ -341,11 +315,14 @@ class ItemStateBuilder(
     val initialY: Float,
     val initialAlpha: Float = 1.0f,
     val initialAngle: Float = 0.0f,
+    val initialColor: Color = Color.White
 ) {
     internal var xAnimation: Animation<Float, AnimationVector1D>? = null
     internal var yAnimation: Animation<Float, AnimationVector1D>? = null
     internal var alphaAnimation: Animation<Float, AnimationVector1D>? = null
     internal var angleAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var colorAnimation: Animation<Color, AnimationVector4D>? = null
+
     internal var terminalCondition: ((
         interpolatedX: Float,
         interpolatedY: Float,
@@ -368,6 +345,8 @@ fun ItemStateBuilder.build(): ItemState {
         angleAnimation = angleAnimation ?: EmptyFloatAnimation(initialAngle),
         time = System.nanoTime(),
         itemToDraw = composeCanvasDrawItem,
+        color = initialColor,
+        colorAnimation = colorAnimation ?: EmptyColorAnimation(initialColor)
     ).let { itemState ->
         terminalCondition?.let {
             itemState.copy(terminalCondition = it)
@@ -401,14 +380,6 @@ fun ItemStateBuilder.animateX(
     return this
 }
 
-fun ItemStateBuilder.animateXWithAnimation(
-    to: ItemStateBuilder.() -> Float,
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
-): ItemStateBuilder {
-    xAnimation = animation()
-    return this
-}
-
 fun ItemStateBuilder.animateAngle(
     to: ItemStateBuilder.() -> Float,
     animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
@@ -418,6 +389,20 @@ fun ItemStateBuilder.animateAngle(
         typeConverter = Float.VectorConverter,
         initialValue = initialAngle,
         targetValue = to()
+    )
+    return this
+}
+
+fun ItemStateBuilder.animateColor(
+    to: ItemStateBuilder.() -> Color,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Color>,
+): ItemStateBuilder {
+    val target = to()
+    colorAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Color.VectorConverter(target.colorSpace),
+        initialValue = initialColor,
+        targetValue = target
     )
     return this
 }
@@ -472,140 +457,35 @@ class EmptyFloatAnimation private constructor(
     }
 }
 
-class SinWaveAnimation<V : AnimationVector> private constructor(
-    val animationSpec: VectorizedAnimationSpec<V>,
-    override val typeConverter: TwoWayConverter<Float, V>,
-    val initialValue: Float,
-    override val targetValue: Float,
-    initialVelocityVector: V? = null,
-) : Animation<Float, V> {
+class EmptyColorAnimation private constructor(
+    override val targetValue: Color,
+    override val typeConverter: TwoWayConverter<Color, AnimationVector4D>,
+) : Animation<Color, AnimationVector4D> {
 
-    constructor(
-        animationSpec: AnimationSpec<Float>,
-        typeConverter: TwoWayConverter<Float, V>,
-        initialValue: Float,
-        initialVelocityVector: V? = null,
-    ) : this(
-        animationSpec.vectorize(typeConverter),
-        typeConverter,
-        initialValue,
-        initialValue,
-        initialVelocityVector
-    )
+    constructor(targetValue: Color) : this(targetValue, Color.VectorConverter(targetValue.colorSpace))
 
-    private val initialValueVector = typeConverter.convertToVector(initialValue)
-    private val targetValueVector = typeConverter.convertToVector(targetValue)
-    private val initialVelocityVector =
-        initialVelocityVector ?: typeConverter.convertToVector(initialValue)
-
-    override val isInfinite: Boolean get() = animationSpec.isInfinite
-    override fun getValueFromNanos(playTimeNanos: Long): Float {
-        return if (!isFinishedFromNanos(playTimeNanos)) {
-            initialValue + typeConverter.convertFromVector(
-                animationSpec.getValueFromNanos(
-                    playTimeNanos, initialValueVector,
-                    targetValueVector, initialVelocityVector
-                )
-            )
-        } else {
-            targetValue
-        }
+    override val isInfinite: Boolean get() = false
+    override fun getValueFromNanos(playTimeNanos: Long): Color {
+        return targetValue
     }
 
     @get:Suppress("MethodNameUnits")
-    override val durationNanos: Long = animationSpec.getDurationNanos(
-        initialValue = initialValueVector,
-        targetValue = targetValueVector,
-        initialVelocity = this.initialVelocityVector
-    )
+    override val durationNanos: Long = 0
 
-    private val endVelocity = animationSpec.getEndVelocity(
-        initialValueVector,
-        targetValueVector,
-        this.initialVelocityVector
-    )
-
-    override fun getVelocityVectorFromNanos(playTimeNanos: Long): V {
-        return if (!isFinishedFromNanos(playTimeNanos)) {
-            animationSpec.getVelocityFromNanos(
-                playTimeNanos,
-                initialValueVector,
-                targetValueVector,
-                initialVelocityVector
-            )
-        } else {
-            endVelocity
-        }
+    override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector4D {
+        return typeConverter.convertToVector(targetValue)
     }
 
     override fun toString(): String {
-        return "TargetBasedAnimation: $initialValue -> $targetValue," +
-                "initial velocity: $initialVelocityVector, duration: $durationMillis ms"
+        return "EmptyFloatAnimation: $targetValue,"
     }
 }
 
-val Animation<*, *>.durationMillis: Long
-    get() = durationNanos / MillisToNanos
-
-@Immutable
-class SinWaveTweenSpec<T>(
-    val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
-    val delay: Int = 0,
-    val easing: Easing = FastOutSlowInEasing,
-) : DurationBasedAnimationSpec<T> {
-
-    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<T, V>) =
-        SinWaveSpec<V>(durationMillis, delay, easing)
-
-    override fun equals(other: Any?): Boolean =
-        if (other is TweenSpec<*>) {
-            other.durationMillis == this.durationMillis &&
-                    other.delay == this.delay &&
-                    other.easing == this.easing
-        } else {
-            false
-        }
-
-    override fun hashCode(): Int {
-        return (durationMillis * 31 + easing.hashCode()) * 31 + delay
-    }
-}
-
-class SinWaveSpec<V : AnimationVector>(
-    override val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
-    override val delayMillis: Int = 0,
-    val easing: Easing = FastOutSlowInEasing,
-) : VectorizedDurationBasedAnimationSpec<V> {
-
-    private val anim = VectorizedFloatAnimationSpec<V>(
-        SinWaveInterpolater(durationMillis, delayMillis, easing)
-    )
-
-    override fun getValueFromNanos(
-        playTimeNanos: Long,
-        initialValue: V,
-        targetValue: V,
-        initialVelocity: V,
-    ): V {
-        return anim.getValueFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
-    }
-
-    override fun getVelocityFromNanos(
-        playTimeNanos: Long,
-        initialValue: V,
-        targetValue: V,
-        initialVelocity: V,
-    ): V {
-        return anim.getVelocityFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
-    }
-}
-
-val MillisToNanos: Long = 1_000_000L
-
-class SinWaveInterpolater(
+class SinWaveSpec(
     val duration: Int = AnimationConstants.DefaultDurationMillis,
     val delay: Int = 0,
     private val easing: Easing = FastOutSlowInEasing,
+    private val multiplier: Int,
 ) : FloatAnimationSpec {
 
     override fun getValueFromNanos(
@@ -618,7 +498,7 @@ class SinWaveInterpolater(
         val clampedPlayTime = clampPlayTime(playTimeMillis)
         val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
         val fraction = easing.transform(rawFraction.coerceIn(0f, 1f))
-        return 100 * (sin(fraction * 2 * Math.PI).toFloat())
+        return initialValue + multiplier * (sin(fraction * 2 * Math.PI).toFloat())
     }
 
     private fun clampPlayTime(playTime: Long): Long {
@@ -654,10 +534,16 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                     drawContext.canvas.nativeCanvas.apply {
                         when (val itemToDraw = item.itemToDraw) {
                             is CanvasPath -> {
-                                rotate(degrees = item.angle, pivot = Offset(x = itemToDraw.path.getBounds().width / 2f, y = itemToDraw.path.getBounds().height / 2f)) {
+                                rotate(
+                                    degrees = item.angle, 
+                                    pivot = Offset(
+                                        x = itemToDraw.path.getBounds().width / 2f, 
+                                        y = itemToDraw.path.getBounds().height / 2f
+                                    )
+                                ) {
                                     drawPath(
                                         path = itemToDraw.path,
-                                        color = itemToDraw.paint.copy(alpha = item.alpha)
+                                        color = item.color.copy(alpha = item.alpha)
                                     )
                                 }
                             }
@@ -665,6 +551,13 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 val textPaint = TextPaint().apply {
                                     itemToDraw.paint(this)
                                     alpha = (item.alpha * 255).toInt()
+                                    color =
+                                        android.graphics.Color.argb(
+                                            (item.color.alpha * 255).toInt(),
+                                            (item.color.red * 255).toInt(),
+                                            (item.color.green * 255).toInt(),
+                                            (item.color.blue * 255).toInt()
+                                        )
                                 }
                                 val bounds = Rect()
                                 textPaint.getTextBounds(itemToDraw.text, 0, itemToDraw.text.length, bounds)

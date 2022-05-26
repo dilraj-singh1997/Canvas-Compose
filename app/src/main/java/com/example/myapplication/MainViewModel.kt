@@ -66,12 +66,15 @@ class MainViewModel : ViewModel() {
                             itemState.alphaAnimation.getValueFromNanos(counter)
                         val angleTicker =
                             itemState.angleAnimation.getValueFromNanos(counter)
+                        val colorTicker =
+                            itemState.colorAnimation.getValueFromNanos(counter)
                         item.safeSet(index) {
                             it.copy(
                                 x = xTicker,
                                 y = yTicker,
                                 alpha = (alphaTicker).coerceAtLeast(0.01f),
-                                angle = angleTicker
+                                angle = angleTicker,
+                                color = colorTicker
                             )
                         }
                         if (
