@@ -224,8 +224,9 @@ data class ItemState constructor(
         interpolatedY: Float,
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
+        interpolatedColor: Color,
         elapsedTimeMillis: Float
-    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, elapsedTimeMillis ->
+    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, interPolatedColor, elapsedTimeMillis ->
         interpolatedX < 0 || interpolatedY < 0 || interpolatedAlpha < 0.05
     }
 )
@@ -328,6 +329,7 @@ class ItemStateBuilder(
         interpolatedY: Float,
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
+        interpolatedColor: Color,
         elapsedTimeMillis: Float
     ) -> Boolean)? = null
 }
@@ -426,6 +428,7 @@ fun ItemStateBuilder.terminalCondition(
         interpolatedY: Float,
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
+        interpolatedColor: Color,
         elapsedTimeMillis: Float
     ) -> Boolean
 ): ItemStateBuilder {

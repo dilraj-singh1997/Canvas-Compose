@@ -83,6 +83,7 @@ class MainViewModel : ViewModel() {
                                 yTicker,
                                 alphaTicker,
                                 angleTicker,
+                                colorTicker,
                                 (counter / 1_000_000).toFloat()
                             )
                         ) {
