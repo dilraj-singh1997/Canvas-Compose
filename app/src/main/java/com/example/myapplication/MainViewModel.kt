@@ -35,9 +35,9 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             for (item in channelItemClicked) {
                 _stateFlow.getAndUpdate {
-                   it.toMutableList().apply {
-                       addAll(item)
-                   }
+                    it.toMutableList().apply {
+                        addAll(item)
+                    }
                 }
                 Log.d("dilraj", "resuming continuation $continuation")
                 continuation?.resume(Unit)
@@ -74,7 +74,15 @@ class MainViewModel : ViewModel() {
                                 angle = angleTicker
                             )
                         }
-                        if (itemState.y <= 0 || itemState.alpha < 0.05f) {
+                        if (
+                            itemState.terminalCondition(
+                                xTicker,
+                                yTicker,
+                                alphaTicker,
+                                angleTicker,
+                                (counter / 1_000_000).toFloat()
+                            )
+                        ) {
                             removal.add(itemState)
                         }
                     }

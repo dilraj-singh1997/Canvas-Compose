@@ -233,6 +233,15 @@ data class ItemState constructor(
     ),
     val time: Long = System.nanoTime(),
     val itemToDraw: ComposeCanvasDrawItem,
+    val terminalCondition: (
+        interpolatedX: Float,
+        interpolatedY: Float,
+        interpolatedAlpha: Float,
+        interpolatedAngle: Float,
+        elapsedTimeMillis: Float
+    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, elapsedTimeMillis ->
+        interpolatedX < 0 || interpolatedY < 0 || interpolatedAlpha < 0.05
+    }
 )
 
 sealed class ComposeCanvasDrawItem
@@ -323,10 +332,17 @@ class ItemStateBuilder(
     val initialAlpha: Float = 1.0f,
     val initialAngle: Float = 0.0f,
 ) {
-    var xAnimation: Animation<Float, AnimationVector1D>? = null
-    var yAnimation: Animation<Float, AnimationVector1D>? = null
-    var alphaAnimation: Animation<Float, AnimationVector1D>? = null
-    var angleAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var xAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var yAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var alphaAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var angleAnimation: Animation<Float, AnimationVector1D>? = null
+    internal var terminalCondition: ((
+        interpolatedX: Float,
+        interpolatedY: Float,
+        interpolatedAlpha: Float,
+        interpolatedAngle: Float,
+        elapsedTimeMillis: Float
+    ) -> Boolean)? = null
 }
 
 fun ItemStateBuilder.build(): ItemState {
@@ -341,8 +357,12 @@ fun ItemStateBuilder.build(): ItemState {
         angle = initialAngle,
         angleAnimation = angleAnimation ?: EmptyFloatAnimation(initialAngle),
         time = System.nanoTime(),
-        itemToDraw = composeCanvasDrawItem
-    )
+        itemToDraw = composeCanvasDrawItem,
+    ).let { itemState ->
+        terminalCondition?.let {
+            itemState.copy(terminalCondition = it)
+        } ?: itemState
+    }
 }
 
 fun ItemStateBuilder.animateY(
@@ -402,6 +422,19 @@ fun ItemStateBuilder.animateAlpha(
         initialValue = initialAlpha,
         targetValue = to()
     )
+    return this
+}
+
+fun ItemStateBuilder.terminalCondition(
+    terminalCondition: (
+        interpolatedX: Float,
+        interpolatedY: Float,
+        interpolatedAlpha: Float,
+        interpolatedAngle: Float,
+        elapsedTimeMillis: Float
+    ) -> Boolean
+): ItemStateBuilder {
+    this.terminalCondition = terminalCondition
     return this
 }
 
