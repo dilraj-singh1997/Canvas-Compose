@@ -12,16 +12,22 @@ import androidx.compose.animation.VectorConverter
 import androidx.compose.animation.core.Animation
 import androidx.compose.animation.core.AnimationConstants
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.AnimationVector4D
+import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
+import androidx.compose.animation.core.VectorizedFloatAnimationSpec
+import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -141,7 +147,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                 viewModel.sendItemClick(
                     List(1) {
                         ItemStateBuilder(
-                            composeCanvasDrawItem = getTextCanvasObject(),
+                            composeCanvasDrawItem = getPathCanvasObject(),
                             initialX = Random.nextInt(0, (width).toInt()).toFloat(),
                             initialY = (height - 200f),
                         )
@@ -150,7 +156,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                     initialX
                                 },
                                 animationSpec = {
-                                    SinWaveSpec(duration = 3500, multiplier = 100)
+                                    SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
                                 }
                             )
                             .animateY(
@@ -183,6 +189,10 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                 },
                                 animationSpec = {
                                     tween(durationMillis = 2000)
+//                                    infiniteRepeatable(
+//                                        animation = tween(durationMillis = 300),
+//                                        repeatMode = RepeatMode.Reverse
+//                                    )
                                 }
                             )
                             .animateSize(
@@ -511,6 +521,57 @@ class EmptyColorAnimation private constructor(
 
     override fun toString(): String {
         return "EmptyFloatAnimation: $targetValue,"
+    }
+}
+
+class SinWaveAnimationSpec(
+    val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
+    val delay: Int = 0,
+    val easing: Easing = FastOutSlowInEasing,
+    val multiplier: Int = 100
+) : DurationBasedAnimationSpec<Float> {
+
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedDurationBasedAnimationSpec<V> =
+        object : VectorizedDurationBasedAnimationSpec<V> {
+            private val anim = VectorizedFloatAnimationSpec<V>(
+                SinWaveSpec(durationMillis, delayMillis, easing, multiplier)
+            )
+
+            override fun getValueFromNanos(
+                playTimeNanos: Long,
+                initialValue: V,
+                targetValue: V,
+                initialVelocity: V
+            ): V {
+                return anim.getValueFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+            }
+
+            override fun getVelocityFromNanos(
+                playTimeNanos: Long,
+                initialValue: V,
+                targetValue: V,
+                initialVelocity: V
+            ): V {
+                return anim.getVelocityFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+            }
+
+            override val delayMillis: Int
+                get() = this@SinWaveAnimationSpec.delay
+            override val durationMillis: Int
+                get() = this@SinWaveAnimationSpec.durationMillis
+        }
+
+    override fun equals(other: Any?): Boolean =
+        if (other is SinWaveAnimationSpec) {
+            other.durationMillis == this.durationMillis &&
+                    other.delay == this.delay &&
+                    other.easing == this.easing
+        } else {
+            false
+        }
+
+    override fun hashCode(): Int {
+        return (durationMillis * 31 + easing.hashCode()) * 31 + delay
     }
 }
 
