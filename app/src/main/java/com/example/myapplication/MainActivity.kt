@@ -9,7 +9,6 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.VectorConverter
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animation
 import androidx.compose.animation.core.AnimationConstants
 import androidx.compose.animation.core.AnimationSpec
@@ -19,10 +18,10 @@ import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -72,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
@@ -185,6 +185,14 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                     tween(durationMillis = 2000)
                                 }
                             )
+                            .animateSize(
+                                to = {
+                                    2.0f
+                                },
+                                animationSpec = {
+                                    spring(dampingRatio = Spring.DampingRatioHighBouncy)
+                                }
+                            )
                             .build()
                     }
                 )
@@ -210,6 +218,7 @@ data class ItemState constructor(
     val x: Float,
     val y: Float,
     val alpha: Float,
+    val scale: Float,
     val xAnimation: Animation<Float, AnimationVector1D>,
     val yAnimation: Animation<Float, AnimationVector1D>,
     val alphaAnimation: Animation<Float, AnimationVector1D>,
@@ -217,6 +226,7 @@ data class ItemState constructor(
     val angleAnimation: Animation<Float, AnimationVector1D>,
     val color: Color,
     val colorAnimation: Animation<Color, AnimationVector4D>,
+    val scaleAnimation: Animation<Float, AnimationVector1D>,
     val time: Long = System.nanoTime(),
     val itemToDraw: ComposeCanvasDrawItem,
     val terminalCondition: (
@@ -225,8 +235,9 @@ data class ItemState constructor(
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
         interpolatedColor: Color,
+        interpolatedScale: Float,
         elapsedTimeMillis: Float
-    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, interPolatedColor, elapsedTimeMillis ->
+    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, interPolatedColor, interpolatedScale, elapsedTimeMillis ->
         interpolatedX < 0 || interpolatedY < 0 || interpolatedAlpha < 0.05
     }
 )
@@ -316,13 +327,15 @@ class ItemStateBuilder(
     val initialY: Float,
     val initialAlpha: Float = 1.0f,
     val initialAngle: Float = 0.0f,
-    val initialColor: Color = Color.White
+    val initialColor: Color = Color.White,
+    val initialScale: Float = 1.0f
 ) {
     internal var xAnimation: Animation<Float, AnimationVector1D>? = null
     internal var yAnimation: Animation<Float, AnimationVector1D>? = null
     internal var alphaAnimation: Animation<Float, AnimationVector1D>? = null
     internal var angleAnimation: Animation<Float, AnimationVector1D>? = null
     internal var colorAnimation: Animation<Color, AnimationVector4D>? = null
+    internal var scaleAnimation: Animation<Float, AnimationVector1D>? = null
 
     internal var terminalCondition: ((
         interpolatedX: Float,
@@ -330,6 +343,7 @@ class ItemStateBuilder(
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
         interpolatedColor: Color,
+        interpolatedScale: Float,
         elapsedTimeMillis: Float
     ) -> Boolean)? = null
 }
@@ -348,7 +362,9 @@ fun ItemStateBuilder.build(): ItemState {
         time = System.nanoTime(),
         itemToDraw = composeCanvasDrawItem,
         color = initialColor,
-        colorAnimation = colorAnimation ?: EmptyColorAnimation(initialColor)
+        colorAnimation = colorAnimation ?: EmptyColorAnimation(initialColor),
+        scale = initialAlpha,
+        scaleAnimation = scaleAnimation ?: EmptyFloatAnimation(initialScale)
     ).let { itemState ->
         terminalCondition?.let {
             itemState.copy(terminalCondition = it)
@@ -377,6 +393,19 @@ fun ItemStateBuilder.animateX(
         animationSpec = animationSpec(),
         typeConverter = Float.VectorConverter,
         initialValue = initialX,
+        targetValue = to()
+    )
+    return this
+}
+
+fun ItemStateBuilder.animateSize(
+    to: ItemStateBuilder.() -> Float,
+    animationSpec: ItemStateBuilder.() -> AnimationSpec<Float>,
+): ItemStateBuilder {
+    scaleAnimation = TargetBasedAnimation(
+        animationSpec = animationSpec(),
+        typeConverter = Float.VectorConverter,
+        initialValue = 1f,
         targetValue = to()
     )
     return this
@@ -429,6 +458,7 @@ fun ItemStateBuilder.terminalCondition(
         interpolatedAlpha: Float,
         interpolatedAngle: Float,
         interpolatedColor: Color,
+        interpolatedScale: Float,
         elapsedTimeMillis: Float
     ) -> Boolean
 ): ItemStateBuilder {
@@ -537,46 +567,61 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                     drawContext.canvas.nativeCanvas.apply {
                         when (val itemToDraw = item.itemToDraw) {
                             is CanvasPath -> {
-                                rotate(
-                                    degrees = item.angle, 
+                                scale(
+                                    scale = item.scale,
                                     pivot = Offset(
-                                        x = itemToDraw.path.getBounds().width / 2f, 
+                                        x = itemToDraw.path.getBounds().width / 2f,
                                         y = itemToDraw.path.getBounds().height / 2f
                                     )
                                 ) {
-                                    drawPath(
-                                        path = itemToDraw.path,
-                                        color = item.color.copy(alpha = item.alpha)
-                                    )
+                                    rotate(
+                                        degrees = item.angle,
+                                        pivot = Offset(
+                                            x = itemToDraw.path.getBounds().width / 2f,
+                                            y = itemToDraw.path.getBounds().height / 2f
+                                        )
+                                    ) {
+                                        drawPath(
+                                            path = itemToDraw.path,
+                                            color = item.color.copy(alpha = item.alpha)
+                                        )
+                                    }
                                 }
                             }
                             is CanvasText -> {
                                 val textPaint = TextPaint().apply {
                                     itemToDraw.paint(this)
-                                    alpha = (item.alpha * 255).toInt()
-                                    color =
-                                        android.graphics.Color.argb(
-                                            (item.color.alpha * 255).toInt(),
+                                    color = android.graphics.Color.argb(
+                                            1,
                                             (item.color.red * 255).toInt(),
                                             (item.color.green * 255).toInt(),
                                             (item.color.blue * 255).toInt()
                                         )
+                                    alpha = (item.alpha * 255).toInt()
                                 }
                                 val bounds = Rect()
                                 textPaint.getTextBounds(itemToDraw.text, 0, itemToDraw.text.length, bounds)
-                                rotate(
-                                    degrees = item.angle,
+                                scale(
+                                    scale = item.scale,
                                     pivot = Offset(
                                         x = bounds.width() / 2f,
                                         y = bounds.height() / 2f
                                     )
                                 ) {
-                                    drawText(
-                                        itemToDraw.text,
-                                        0f,
-                                        bounds.height().toFloat(),
-                                        textPaint
-                                    )
+                                    rotate(
+                                        degrees = item.angle,
+                                        pivot = Offset(
+                                            x = bounds.width() / 2f,
+                                            y = bounds.height() / 2f
+                                        )
+                                    ) {
+                                        drawText(
+                                            itemToDraw.text,
+                                            0f,
+                                            bounds.height().toFloat(),
+                                            textPaint
+                                        )
+                                    }
                                 }
                             }
                             is CanvasObject -> {
