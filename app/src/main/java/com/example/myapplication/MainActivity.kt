@@ -251,7 +251,7 @@ data class CanvasPath(
 data class CanvasText(val text: String, val paint: TextPaint.() -> Unit) :
     ComposeCanvasDrawItem()
 
-data class CanvasObject(val objectToDraw: DrawScope.(alpha: Float, angle: Float) -> Unit) :
+data class CanvasObject(val objectToDraw: DrawScope.(alpha: Float, angle: Float, color: Color, scale: Float) -> Unit) :
     ComposeCanvasDrawItem()
 
 fun getPathCanvasObject() = CanvasPath(
@@ -271,7 +271,7 @@ fun getTextCanvasObject() =
     }
 
 fun getCustomCanvasObject() = CanvasObject(
-    objectToDraw = { alpha, angle ->
+    objectToDraw = { alpha, angle, _, _ ->
         val textPaint = TextPaint().apply {
             color = android.graphics.Color.WHITE
             isAntiAlias = true
@@ -625,7 +625,7 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 }
                             }
                             is CanvasObject -> {
-                                itemToDraw.objectToDraw(this@translate, item.alpha, item.angle)
+                                itemToDraw.objectToDraw(this@translate, item.alpha, item.angle, item.color, item.scale)
                             }
                         }
                     }
