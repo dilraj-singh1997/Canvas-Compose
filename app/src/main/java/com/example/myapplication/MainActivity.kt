@@ -15,9 +15,11 @@ import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.TwoWayConverter
@@ -25,6 +27,7 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VectorizedAnimationSpec
 import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
 import androidx.compose.animation.core.VectorizedFloatAnimationSpec
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -167,7 +170,14 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                                     height / 2
                                 },
                                 animationSpec = {
-                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+                                    keyframes {
+                                        durationMillis = 3500
+                                        initialY at 0 with LinearOutSlowInEasing // for 0-15 ms
+                                        (height / 1) - 300 at 1000 with FastOutLinearInEasing // for 15-75 ms
+                                        (height / 2) + 300 at 1500 // ms
+                                        (height / 2) at 3500 // ms
+                                    }
+//                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
                                 }
                             )
                             .animateAlpha(
