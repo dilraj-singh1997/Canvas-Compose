@@ -27,6 +27,7 @@ import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
 import androidx.compose.animation.core.VectorizedFloatAnimationSpec
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -93,6 +94,7 @@ import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.Serializable
 import java.util.*
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -146,64 +148,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
             onClick = {
                 viewModel.sendItemClick(
                     List(1) {
-                        ItemStateBuilder(
-                            composeCanvasDrawItem = getPathCanvasObject(),
-                            initialX = Random.nextInt(0, (width).toInt()).toFloat(),
-                            initialY = (height - 200f),
-                        )
-                            .animateX(
-                                to = {
-                                    initialX
-                                },
-                                animationSpec = {
-                                    SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
-                                }
-                            )
-                            .animateY(
-                                to = {
-                                    height / 2
-                                },
-                                animationSpec = {
-                                    tween(durationMillis = 3500, easing = FastOutSlowInEasing)
-                                }
-                            )
-                            .animateAlpha(
-                                to = {
-                                    0f
-                                },
-                                animationSpec = {
-                                    tween(durationMillis = 5500, easing = LinearEasing)
-                                }
-                            )
-                            .animateAngle(
-                                to = {
-                                    1440f
-                                },
-                                animationSpec = {
-                                    tween(durationMillis = 2500, easing = FastOutSlowInEasing)
-                                }
-                            )
-                            .animateColor(
-                                to = {
-                                    Color.Green
-                                },
-                                animationSpec = {
-                                    tween(durationMillis = 2000)
-//                                    infiniteRepeatable(
-//                                        animation = tween(durationMillis = 300),
-//                                        repeatMode = RepeatMode.Reverse
-//                                    )
-                                }
-                            )
-                            .animateSize(
-                                to = {
-                                    2.0f
-                                },
-                                animationSpec = {
-                                    spring(dampingRatio = Spring.DampingRatioHighBouncy)
-                                }
-                            )
-                            .build()
+                        getItemCircleLoader(width, height)
                     }
                 )
             },
@@ -221,6 +166,145 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
 
     }
 }
+
+fun getHeartAnimation(width: Float, height: Float) =
+    ItemStateBuilder(
+        composeCanvasDrawItem = getPathCanvasObject(),
+        initialX = Random.nextInt(0, (width).toInt()).toFloat(),
+        initialY = (height - 200f),
+    )
+        .animateX(
+            to = {
+                initialX
+            },
+            animationSpec = {
+                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
+            }
+        )
+        .animateY(
+            to = {
+                height / 2
+            },
+            animationSpec = {
+                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+            }
+        )
+        .animateAlpha(
+            to = {
+                0f
+            },
+            animationSpec = {
+                tween(durationMillis = 5500, easing = LinearEasing)
+            }
+        )
+        .animateAngle(
+            to = {
+                1440f
+            },
+            animationSpec = {
+                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+            }
+        )
+        .animateColor(
+            to = {
+                Color.Green
+            },
+            animationSpec = {
+                tween(durationMillis = 2000)
+            }
+        )
+        .animateSize(
+            to = {
+                2.0f
+            },
+            animationSpec = {
+                spring(dampingRatio = Spring.DampingRatioHighBouncy)
+            }
+        )
+        .build()
+
+fun getItemCircleLoader(width: Float, height: Float) =
+    ItemStateBuilder(
+        composeCanvasDrawItem = getTextCanvasObject(),
+        initialX = (width / 2 - 400f),
+        initialY = (height / 2 + 0f),
+    )
+        .animateX(
+            to = {
+                initialX
+            },
+            animationSpec = {
+                repeatable(
+                    iterations = 10,
+                    animation = keyframes {
+                        durationMillis = 8000
+                        (width / 2) - 400f at 0 with InverseCosineEasing
+                        (width / 2) at 1000 with SineEasing
+                        (width / 2) + 400f at 2000 with InverseCosineEasing
+                        (width / 2) at 3000 with SineEasing
+                        (width / 2) - 400f at 4000 with InverseCosineEasing
+                        (width / 2) at 5000 with SineEasing
+                        (width / 2) + 400f at 6000 with InverseCosineEasing
+                        (width / 2) at 7000 with SineEasing
+                        (width / 2) - 400f at 8000 with InverseCosineEasing
+                    }
+                )
+            }
+        )
+        .animateY(
+            to = {
+                initialY
+            },
+            animationSpec = {
+                repeatable(
+                    iterations = 10,
+                    animation = keyframes {
+                        durationMillis = 8000
+                        (height / 2) at 0 with SineEasing
+                        (height / 2) - 400f at 1000 with InverseCosineEasing
+                        (height / 2) at 2000 with SineEasing
+                        (height / 2) + 400f at 3000 with InverseCosineEasing
+                        (height / 2) at 4000 with SineEasing
+                    }
+                )
+            }
+        )
+        .animateAngle(
+            to = {
+                360f
+            },
+            animationSpec = {
+                repeatable(
+                    iterations = 10,
+                    animation = keyframes {
+                        durationMillis = 8000
+                        0f at 0 with LinearEasing
+                        360f at 4000 with LinearEasing
+                    }
+                )
+            }
+        )
+        .terminalCondition { _, _, _, _, _, _, elapsedTimeMillis ->
+            elapsedTimeMillis > 80000
+        }
+        .animateColor(
+            to = {
+                Color.Green
+            },
+            animationSpec = {
+                repeatable(
+                    iterations = 10,
+                    animation = keyframes {
+                        durationMillis = 8000
+                        Color.Green at 2000 with LinearEasing
+                        initialColor at 4000 with LinearEasing
+                        Color.Red at 6000 with LinearEasing
+                        initialColor at 8000 with LinearEasing
+                    }
+                )
+            }
+        )
+        .build()
 
 // 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
 data class ItemState constructor(
@@ -251,6 +335,14 @@ data class ItemState constructor(
         interpolatedX < 0 || interpolatedY < 0 || interpolatedAlpha < 0.05
     }
 )
+
+val SineEasing = Easing { fraction -> sin(fraction * 2 * Math.PI / 4).toFloat() }
+
+val InverseCosineEasing = Easing { fraction -> 1 - cos(fraction * 2 * Math.PI / 4).toFloat() }
+
+val CosineEasing = Easing { fraction -> cos(fraction * 2 * Math.PI / 4).toFloat() }
+
+val InverseSineEasing = Easing { fraction -> 1 - sin(fraction * 2 * Math.PI / 4).toFloat() }
 
 sealed class ComposeCanvasDrawItem
 
