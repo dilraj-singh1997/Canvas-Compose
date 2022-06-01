@@ -21,8 +21,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FloatAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.TargetBasedAnimation
-import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VectorizedDurationBasedAnimationSpec
@@ -94,9 +94,12 @@ import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.Serializable
 import java.util.*
+import java.util.logging.Logger
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
+
+const val G = -9.8f
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,7 +151,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
             onClick = {
                 viewModel.sendItemClick(
                     List(1) {
-                        getItemCircleLoader(width, height)
+                        getParabolaAnimation(width, height, (it * 100))
                     }
                 )
             },
@@ -167,7 +170,63 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
     }
 }
 
-fun getHeartAnimation(width: Float, height: Float) =
+fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): ItemState {
+    val xVelocity = Random.nextInt(-50, 50)
+    val yVelocity = 100//Random.nextInt(0, 200)
+
+    return ItemStateBuilder(
+        composeCanvasDrawItem = getTextCanvasObject("\uD83D\uDD25"),
+        initialX = width / 2,
+        initialY = (height - 500f),
+    )
+        .animateX {
+            object : Animation<Float, AnimationVector1D> {
+                override val durationNanos: Long
+                    get() = Long.MAX_VALUE
+                override val isInfinite: Boolean
+                    get() = true
+                override val targetValue: Float
+                    get() = 0f
+                override val typeConverter: TwoWayConverter<Float, AnimationVector1D>
+                    get() = Float.VectorConverter
+
+                override fun getValueFromNanos(playTimeNanos: Long): Float {
+                    return initialX + (xVelocity * playTimeNanos / 100_000_000).toFloat()
+                }
+
+                override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
+                    return Float.VectorConverter.convertToVector(targetValue)
+                }
+            }
+        }
+        .animateY {
+            object : Animation<Float, AnimationVector1D> {
+                override val durationNanos: Long
+                    get() = Long.MAX_VALUE
+                override val isInfinite: Boolean
+                    get() = true
+                override val targetValue: Float
+                    get() = 0f
+                override val typeConverter: TwoWayConverter<Float, AnimationVector1D>
+                    get() = Float.VectorConverter
+
+                override fun getValueFromNanos(playTimeNanos: Long): Float {
+                    val time = playTimeNanos / 100_000_000f
+                    return initialY - ((yVelocity * time) + (0.5 * G * (time * time))).toFloat()
+                }
+
+                override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
+                    return Float.VectorConverter.convertToVector(targetValue)
+                }
+            }
+        }
+        .terminalCondition { _, interpolatedY, _, _, _, _, _ ->
+            interpolatedY > height
+        }
+        .build()
+}
+
+fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0) =
     ItemStateBuilder(
         composeCanvasDrawItem = getPathCanvasObject(),
         initialX = Random.nextInt(0, (width).toInt()).toFloat(),
@@ -223,7 +282,7 @@ fun getHeartAnimation(width: Float, height: Float) =
         )
         .build()
 
-fun getItemCircleLoader(width: Float, height: Float) =
+fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0) =
     ItemStateBuilder(
         composeCanvasDrawItem = getTextCanvasObject(),
         initialX = (width / 2 - 400f),
@@ -247,7 +306,8 @@ fun getItemCircleLoader(width: Float, height: Float) =
                         (width / 2) + 400f at 6000 with InverseCosineEasing
                         (width / 2) at 7000 with SineEasing
                         (width / 2) - 400f at 8000 with InverseCosineEasing
-                    }
+                    },
+                    initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
@@ -265,7 +325,8 @@ fun getItemCircleLoader(width: Float, height: Float) =
                         (height / 2) at 2000 with SineEasing
                         (height / 2) + 400f at 3000 with InverseCosineEasing
                         (height / 2) at 4000 with SineEasing
-                    }
+                    },
+                    initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
@@ -280,12 +341,13 @@ fun getItemCircleLoader(width: Float, height: Float) =
                         durationMillis = 8000
                         0f at 0 with LinearEasing
                         360f at 4000 with LinearEasing
-                    }
+                    },
+                    initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
         .terminalCondition { _, _, _, _, _, _, elapsedTimeMillis ->
-            elapsedTimeMillis > 80000
+            elapsedTimeMillis > 80000 + initialDelay
         }
         .animateColor(
             to = {
@@ -300,7 +362,8 @@ fun getItemCircleLoader(width: Float, height: Float) =
                         initialColor at 4000 with LinearEasing
                         Color.Red at 6000 with LinearEasing
                         initialColor at 8000 with LinearEasing
-                    }
+                    },
+                    initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
@@ -330,19 +393,15 @@ data class ItemState constructor(
         interpolatedAngle: Float,
         interpolatedColor: Color,
         interpolatedScale: Float,
-        elapsedTimeMillis: Float
-    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, interpolatedAngle, interPolatedColor, interpolatedScale, elapsedTimeMillis ->
+        elapsedTimeMillis: Float,
+    ) -> Boolean = { interpolatedX, interpolatedY, interpolatedAlpha, _, _, _, _ ->
         interpolatedX < 0 || interpolatedY < 0 || interpolatedAlpha < 0.05
-    }
+    },
 )
 
 val SineEasing = Easing { fraction -> sin(fraction * 2 * Math.PI / 4).toFloat() }
 
 val InverseCosineEasing = Easing { fraction -> 1 - cos(fraction * 2 * Math.PI / 4).toFloat() }
-
-val CosineEasing = Easing { fraction -> cos(fraction * 2 * Math.PI / 4).toFloat() }
-
-val InverseSineEasing = Easing { fraction -> 1 - sin(fraction * 2 * Math.PI / 4).toFloat() }
 
 sealed class ComposeCanvasDrawItem
 
@@ -362,8 +421,8 @@ fun getPathCanvasObject() = CanvasPath(
     },
 )
 
-fun getTextCanvasObject() =
-    CanvasText("hi") {
+fun getTextCanvasObject(text: String = "hi") =
+    CanvasText(text) {
         color = android.graphics.Color.WHITE
         isAntiAlias = true
         textSize = 48f
@@ -430,7 +489,7 @@ class ItemStateBuilder(
     val initialAlpha: Float = 1.0f,
     val initialAngle: Float = 0.0f,
     val initialColor: Color = Color.White,
-    val initialScale: Float = 1.0f
+    val initialScale: Float = 1.0f,
 ) {
     internal var xAnimation: Animation<Float, AnimationVector1D>? = null
     internal var yAnimation: Animation<Float, AnimationVector1D>? = null
@@ -446,7 +505,7 @@ class ItemStateBuilder(
         interpolatedAngle: Float,
         interpolatedColor: Color,
         interpolatedScale: Float,
-        elapsedTimeMillis: Float
+        elapsedTimeMillis: Float,
     ) -> Boolean)? = null
 }
 
@@ -497,6 +556,48 @@ fun ItemStateBuilder.animateX(
         initialValue = initialX,
         targetValue = to()
     )
+    return this
+}
+
+fun ItemStateBuilder.animateX(
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    xAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateY(
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    yAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateSize(
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    scaleAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateColor(
+    animation: ItemStateBuilder.() -> Animation<Color, AnimationVector4D>,
+): ItemStateBuilder {
+    colorAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateAlpha(
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    alphaAnimation = animation()
+    return this
+}
+
+fun ItemStateBuilder.animateAngle(
+    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+): ItemStateBuilder {
+    angleAnimation = animation()
     return this
 }
 
@@ -561,8 +662,8 @@ fun ItemStateBuilder.terminalCondition(
         interpolatedAngle: Float,
         interpolatedColor: Color,
         interpolatedScale: Float,
-        elapsedTimeMillis: Float
-    ) -> Boolean
+        elapsedTimeMillis: Float,
+    ) -> Boolean,
 ): ItemStateBuilder {
     this.terminalCondition = terminalCondition
     return this
@@ -597,7 +698,8 @@ class EmptyColorAnimation private constructor(
     override val typeConverter: TwoWayConverter<Color, AnimationVector4D>,
 ) : Animation<Color, AnimationVector4D> {
 
-    constructor(targetValue: Color) : this(targetValue, Color.VectorConverter(targetValue.colorSpace))
+    constructor(targetValue: Color) : this(targetValue,
+        Color.VectorConverter(targetValue.colorSpace))
 
     override val isInfinite: Boolean get() = false
     override fun getValueFromNanos(playTimeNanos: Long): Color {
@@ -620,7 +722,7 @@ class SinWaveAnimationSpec(
     val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
     val delay: Int = 0,
     val easing: Easing = FastOutSlowInEasing,
-    val multiplier: Int = 100
+    val multiplier: Int = 100,
 ) : DurationBasedAnimationSpec<Float> {
 
     override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedDurationBasedAnimationSpec<V> =
@@ -633,18 +735,24 @@ class SinWaveAnimationSpec(
                 playTimeNanos: Long,
                 initialValue: V,
                 targetValue: V,
-                initialVelocity: V
+                initialVelocity: V,
             ): V {
-                return anim.getValueFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+                return anim.getValueFromNanos(playTimeNanos,
+                    initialValue,
+                    targetValue,
+                    initialVelocity)
             }
 
             override fun getVelocityFromNanos(
                 playTimeNanos: Long,
                 initialValue: V,
                 targetValue: V,
-                initialVelocity: V
+                initialVelocity: V,
             ): V {
-                return anim.getVelocityFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
+                return anim.getVelocityFromNanos(playTimeNanos,
+                    initialValue,
+                    targetValue,
+                    initialVelocity)
             }
 
             override val delayMillis: Int
@@ -745,15 +853,18 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 val textPaint = TextPaint().apply {
                                     itemToDraw.paint(this)
                                     color = android.graphics.Color.argb(
-                                            1,
-                                            (item.color.red * 255).toInt(),
-                                            (item.color.green * 255).toInt(),
-                                            (item.color.blue * 255).toInt()
-                                        )
+                                        1,
+                                        (item.color.red * 255).toInt(),
+                                        (item.color.green * 255).toInt(),
+                                        (item.color.blue * 255).toInt()
+                                    )
                                     alpha = (item.alpha * 255).toInt()
                                 }
                                 val bounds = Rect()
-                                textPaint.getTextBounds(itemToDraw.text, 0, itemToDraw.text.length, bounds)
+                                textPaint.getTextBounds(itemToDraw.text,
+                                    0,
+                                    itemToDraw.text.length,
+                                    bounds)
                                 scale(
                                     scale = item.scale,
                                     pivot = Offset(
@@ -778,7 +889,11 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 }
                             }
                             is CanvasObject -> {
-                                itemToDraw.objectToDraw(this@translate, item.alpha, item.angle, item.color, item.scale)
+                                itemToDraw.objectToDraw(this@translate,
+                                    item.alpha,
+                                    item.angle,
+                                    item.color,
+                                    item.scale)
                             }
                         }
                     }
