@@ -1,13 +1,15 @@
 package com.example.myapplication
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Rect
-import android.graphics.Typeface
 import android.os.Bundle
 import android.text.TextPaint
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.VectorConverter
 import androidx.compose.animation.core.Animation
 import androidx.compose.animation.core.AnimationConstants
@@ -76,15 +78,27 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.compose.type_safe_args.annotation.ArgumentProvider
 import com.compose.type_safe_args.annotation.ComposeDestination
 import com.compose.type_safe_args.annotation.HasDefaultValue
@@ -94,7 +108,6 @@ import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.Serializable
 import java.util.*
-import java.util.logging.Logger
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -150,8 +163,9 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
         Button(
             onClick = {
                 viewModel.sendItemClick(
-                    List(1) {
-                        getParabolaAnimation(width, height, (it * 100))
+                    List(10) {
+                        getParabolaAnimation(width, height)
+//                        getHeartPNGAnimation(width, height, (it * 100))
                     }
                 )
             },
@@ -172,10 +186,17 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
 
 fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): ItemState {
     val xVelocity = Random.nextInt(-50, 50)
-    val yVelocity = 100//Random.nextInt(0, 200)
+    val yVelocity = 170//Random.nextInt(0, 200)
+    val rnd = Random.nextInt(0, 5)
 
     return ItemStateBuilder(
-        composeCanvasDrawItem = getTextCanvasObject("\uD83D\uDD25"),
+        composeCanvasDrawItem = getTextCanvasObject(when (rnd % 4) {
+            0 -> "\uD83E\uDD23"
+            1 -> "\uD83D\uDCA9"
+            2 -> "\uD83E\uDD2F"
+            3 -> "\uD83D\uDE34"
+            else -> "\uD83E\uDD24"
+        }),
         initialX = width / 2,
         initialY = (height - 500f),
     )
@@ -278,6 +299,77 @@ fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0) =
             },
             animationSpec = {
                 spring(dampingRatio = Spring.DampingRatioHighBouncy)
+            }
+        )
+        .build()
+
+fun getHeartPNGAnimation(width: Float, height: Float, initialDelay: Int = 0) =
+    ItemStateBuilder(
+        composeCanvasDrawItem = getCustomCanvasObject(),//getTextCanvasObject("debugdilraj"),//getImageCanvasObject(R.drawable.heart_stack),
+        initialX = Random.nextInt(0, (width).toInt()).toFloat(),
+        initialY = (height - 200f),
+    )
+//        .animateX(
+//            to = {
+//                initialX
+//            },
+//            animationSpec = {
+//                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
+//            }
+//        )
+        .animateColor(
+            to = {
+                Color.Green
+            },
+            animationSpec = {
+                keyframes {
+                    durationMillis = 2000
+                    Color.White at 0 with LinearEasing
+                    Color.Red at 1000 with LinearEasing
+                    Color.Green at 2000 with LinearEasing
+                }
+            }
+        )
+        .animateY(
+            to = {
+                height / 2
+            },
+            animationSpec = {
+                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+            }
+        )
+        .animateAngle(
+            to = {
+                360f
+            },
+            animationSpec = {
+                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+            }
+        )
+        .animateAlpha(
+            to = {
+                0f
+            },
+            animationSpec = {
+                tween(durationMillis = 5500, easing = LinearEasing)
+            }
+        )
+        .animateSize(
+            to = {
+                0.1f
+            },
+            animationSpec = {
+                tween(
+                    durationMillis = 3500,
+                    easing = { fraction ->
+                        val startTime = 0.6f
+                        if (fraction < startTime) {
+                            0f
+                        } else {
+                            (fraction - startTime) * (1 / (1 - startTime))
+                        }
+                    }
+                )
             }
         )
         .build()
@@ -409,10 +501,13 @@ data class CanvasPath(
     val path: Path,
 ) : ComposeCanvasDrawItem()
 
-data class CanvasText(val text: String, val paint: TextPaint.() -> Unit) :
+data class CanvasText(val text: String, val style: () -> TextStyle) :
     ComposeCanvasDrawItem()
 
-data class CanvasObject(val objectToDraw: DrawScope.(alpha: Float, angle: Float, color: Color, scale: Float) -> Unit) :
+data class CanvasImage(@DrawableRes val imageSrc: Int) :
+    ComposeCanvasDrawItem()
+
+data class CanvasObject @OptIn(ExperimentalTextApi::class) constructor(val objectToDraw: DrawScope.(textMeasurer: TextMeasurer, alpha: Float, angle: Float, color: Color, scale: Float) -> Unit) :
     ComposeCanvasDrawItem()
 
 fun getPathCanvasObject() = CanvasPath(
@@ -423,48 +518,48 @@ fun getPathCanvasObject() = CanvasPath(
 
 fun getTextCanvasObject(text: String = "hi") =
     CanvasText(text) {
-        color = android.graphics.Color.WHITE
-        isAntiAlias = true
-        textSize = 48f
-        typeface =
-            android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT,
-                android.graphics.Typeface.BOLD)
+        TextStyle.Default.copy(
+            fontSize = 48.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 
+fun getImageCanvasObject(@DrawableRes resource: Int) =
+    CanvasImage(resource)
+
+@OptIn(ExperimentalTextApi::class)
 fun getCustomCanvasObject() = CanvasObject(
-    objectToDraw = { alpha, angle, _, _ ->
-        val textPaint = TextPaint().apply {
-            color = android.graphics.Color.WHITE
-            isAntiAlias = true
-            textSize = 48f
-            this.alpha = (alpha * 255).toInt()
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-
-        val emojiPaint = TextPaint().apply {
-            color = android.graphics.Color.GREEN
-            isAntiAlias = true
-            textSize = 124f
-            this.alpha = (alpha * 255).toInt()
-        }
-
+    objectToDraw = { textMeasurer, alpha, angle, _, _ ->
         val text = "@ayushnasa"
         val emoji =
             //"\uD83D\uDD34"
             "\uD83D\uDD25"
-        drawContext.canvas.nativeCanvas.drawText(text, 0f, 0f, textPaint)
 
-        val textBounds = Rect()
-        textPaint.getTextBounds(text, 0, text.length, textBounds)
+        val textResult = textMeasurer.measure(AnnotatedString(text))
 
-        val emojiBounds = Rect()
-        emojiPaint.getTextBounds(emoji, 0, emoji.length, emojiBounds)
+        val emojiTextResult = textMeasurer.measure(
+            text = AnnotatedString(emoji),
+            style = TextStyle(
+                fontSize = 30.sp
+            )
+        )
 
-        drawContext.canvas.nativeCanvas.drawText(
-            emoji,
-            (textBounds.width() - emojiBounds.width()) / 2f,
-            (textPaint.textSize) * 1f,
-            emojiPaint
+        drawText(
+            textLayoutResult = textResult,
+            brush = SolidColor(Color.White),
+            topLeft = Offset(
+                x = 0f,
+                y = (emojiTextResult.size.height - textResult.size.height) / 2f,
+            ),
+        )
+
+        drawText(
+            textLayoutResult = emojiTextResult,
+            brush = SolidColor(Color.Green),
+            topLeft = Offset(
+                x = textResult.size.width.toFloat(),
+                y = 0f
+            ),
         )
 
         val path = Path().apply {
@@ -817,12 +912,33 @@ class SinWaveSpec(
     }
 }
 
+@OptIn(ExperimentalTextApi::class)
 @Composable
 fun Heart(modifier: Modifier, items: List<ItemState>) {
     Log.d("dilraj", "recomposing canvas")
 
-    Canvas(modifier = modifier,
-        onDraw = {
+    val resources = LocalContext.current.resources
+
+    val originalBitmap = remember {
+        BitmapFactory.decodeResource(
+            resources,
+            R.drawable.heart_stack
+        )
+    }
+    val bitmap = remember {
+        Bitmap.createScaledBitmap(
+            originalBitmap,
+            100,
+            100 * originalBitmap.height / originalBitmap.width,
+            true
+        )
+    }
+
+    val textMeasurer = rememberTextMeasurer()
+
+    Canvas(
+        modifier = modifier,
+        onDraw = drawScope@{
             for (item in items) {
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
@@ -850,50 +966,67 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 }
                             }
                             is CanvasText -> {
-                                val textPaint = TextPaint().apply {
-                                    itemToDraw.paint(this)
-                                    color = android.graphics.Color.argb(
-                                        1,
-                                        (item.color.red * 255).toInt(),
-                                        (item.color.green * 255).toInt(),
-                                        (item.color.blue * 255).toInt()
-                                    )
-                                    alpha = (item.alpha * 255).toInt()
-                                }
-                                val bounds = Rect()
-                                textPaint.getTextBounds(itemToDraw.text,
-                                    0,
-                                    itemToDraw.text.length,
-                                    bounds)
+                                val textResult = textMeasurer.measure(
+                                    text = AnnotatedString(itemToDraw.text),
+                                    style = itemToDraw.style()
+                                )
+
                                 scale(
                                     scale = item.scale,
                                     pivot = Offset(
-                                        x = bounds.width() / 2f,
-                                        y = bounds.height() / 2f
+                                        x = textResult.size.width / 2f,
+                                        y = textResult.size.height / 2f
                                     )
                                 ) {
                                     rotate(
                                         degrees = item.angle,
                                         pivot = Offset(
-                                            x = bounds.width() / 2f,
-                                            y = bounds.height() / 2f
+                                            x = textResult.size.width / 2f,
+                                            y = textResult.size.height / 2f
                                         )
                                     ) {
                                         drawText(
-                                            itemToDraw.text,
-                                            0f,
-                                            bounds.height().toFloat(),
-                                            textPaint
+                                            textLayoutResult = textResult,
+                                            color = item.color,
+                                            alpha = item.alpha,
                                         )
                                     }
                                 }
                             }
                             is CanvasObject -> {
-                                itemToDraw.objectToDraw(this@translate,
+                                itemToDraw.objectToDraw(
+                                    this@drawScope,
+                                    textMeasurer,
                                     item.alpha,
                                     item.angle,
                                     item.color,
-                                    item.scale)
+                                    item.scale
+                                )
+                            }
+                            is CanvasImage -> {
+                                val width = bitmap.width
+                                val height = bitmap.height
+                                scale(
+                                    scale = item.scale,
+                                    pivot = Offset(
+                                        x = width / 2f,
+                                        y = height / 2f
+                                    )
+                                ) {
+                                    rotate(
+                                        degrees = item.angle,
+                                        pivot = Offset(
+                                            x = width / 2f,
+                                            y = height / 2f
+                                        )
+                                    ) {
+                                        drawImage(
+                                            image = bitmap.asImageBitmap(),
+                                            topLeft = Offset.Zero,
+                                            alpha = item.alpha,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -902,23 +1035,6 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
         }
     )
 }
-
-//@Composable
-//fun Heart() {
-//    Canvas(modifier = Modifier
-//        .fillMaxSize(),
-//        onDraw = {
-//            val path = Path().apply {
-//                heartPath(Size(120f, 120f))
-//            }
-//
-//            drawPath(
-//                path = path,
-//                color = Color.Red,
-//            )
-//        }
-//    )
-//}
 
 fun Path.heartPath(size: Size): Path {
     //the logic is taken from StackOverFlow [answer](https://stackoverflow.com/a/41251829/5348665)and converted into extension function
