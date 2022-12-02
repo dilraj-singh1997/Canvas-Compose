@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
 
-    val items by viewModel.stateFlow.collectAsState()
+    val items by viewModel.stateFlow.collectAsState(emptyList())
 
     Box(modifier = Modifier.fillMaxSize()) {
         Heart(
@@ -249,9 +249,9 @@ fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): It
         .build()
 }
 
-fun getHighReaction(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
-
-}
+//fun getHighReaction(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
+//
+//}
 
 fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
     val time = 1500
@@ -520,7 +520,7 @@ fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0): Ite
 }
 
 data class ItemStateHolder(
-    val items: List<ItemState> = emptyList()
+    val items: List<ItemState> = mutableListOf()
 )
 
 // 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
