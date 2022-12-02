@@ -3,9 +3,7 @@ package com.example.myapplication
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Rect
 import android.os.Bundle
-import android.text.TextPaint
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -62,6 +60,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,7 +92,6 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
@@ -144,7 +142,7 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
                 .fillMaxSize()
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 36.dp),
-            items = items
+            _items = { items }
         )
 
         LaunchedEffect(true) {
@@ -162,11 +160,15 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
 
         Button(
             onClick = {
+                val direction = if (Random.nextFloat() < 0.5) -1 else 1
+                Log.d("debugdilraj", "button clicked")
                 viewModel.sendItemClick(
-                    List(10) {
-                        getParabolaAnimation(width, height)
+                    List(6) {
+//                        getItemCircleLoader(width, height, (it * 120))
+                        getHeartAnimation(width, height, (it * 25), direction)
+//                        getParabolaAnimation(width, height)
 //                        getHeartPNGAnimation(width, height, (it * 100))
-                    }
+                    }.reversed()
                 )
             },
             modifier = Modifier
@@ -247,18 +249,37 @@ fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): It
         .build()
 }
 
-fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0) =
-    ItemStateBuilder(
-        composeCanvasDrawItem = getPathCanvasObject(),
-        initialX = Random.nextInt(0, (width).toInt()).toFloat(),
+fun getHighReaction(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
+
+}
+
+fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
+    val time = 1500
+    val fadeTime = 1500
+    val xDelta = 100f * direction
+    val angle = 25f * direction
+
+    return ItemStateBuilder(
+        composeCanvasDrawItem = getImageCanvasObject(Size(220f, 200f), ImageKey.Drawable(R.drawable.hearts_100)),//ImageKey.URL("https://i.picsum.photos/id/548/200/300.jpg?hmac=dXVAc-s_U8QgoYUrMld43VmrOby1cluk-akWgxY6b9Y")),
+        initialX = (width / 2f),//Random.nextInt(0, (width).toInt()).toFloat(),
         initialY = (height - 200f),
+        initialAngle = 0f,
     )
         .animateX(
             to = {
                 initialX
             },
             animationSpec = {
-                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
+                repeatable(
+                    iterations = 1,
+                    initialStartOffset = StartOffset(initialDelay),
+                    animation = SinWaveAnimationSpec(
+                        durationMillis = time,
+                        delta = xDelta,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+//                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
             }
         )
         .animateY(
@@ -266,7 +287,12 @@ fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0) =
                 height / 2
             },
             animationSpec = {
-                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+                repeatable(
+                    iterations = 1,
+                    initialStartOffset = StartOffset(initialDelay),
+                    animation = tween(durationMillis = time, easing = FastOutSlowInEasing)
+                )
+//                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
             }
         )
         .animateAlpha(
@@ -274,34 +300,51 @@ fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0) =
                 0f
             },
             animationSpec = {
-                tween(durationMillis = 5500, easing = LinearEasing)
+                tween(durationMillis = fadeTime, easing = LinearEasing)
             }
         )
         .animateAngle(
             to = {
-                1440f
+                angle
             },
             animationSpec = {
-                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+                repeatable(
+                    iterations = 1,
+                    initialStartOffset = StartOffset(initialDelay),
+                    animation = CosineWaveAnimationSpec(durationMillis = time,
+                        delta = angle,
+                        easing = FastOutSlowInEasing),
+//                    animation = keyframes {
+//                        durationMillis = 4000
+//                        45f at 0 with inverseCosineEasing(FastOutSlowInEasing)
+//                        0f at 1000 with sineEasing(FastOutSlowInEasing)
+//                        -45f at 2000 with inverseCosineEasing(FastOutSlowInEasing)
+//                        0f at 3000 with sineEasing(FastOutSlowInEasing)
+//                        45f at 4000 with inverseCosineEasing(FastOutSlowInEasing)
+////                        45f at 3600 with SineEasing
+//                    }
+                )
+//                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
             }
         )
-        .animateColor(
-            to = {
-                Color.Green
-            },
-            animationSpec = {
-                tween(durationMillis = 2000)
-            }
-        )
+//        .animateColor(
+//            to = {
+//                Color.Green
+//            },
+//            animationSpec = {
+//                tween(durationMillis = 2000)
+//            }
+//        )
         .animateSize(
             to = {
-                2.0f
+                1.5f
             },
             animationSpec = {
                 spring(dampingRatio = Spring.DampingRatioHighBouncy)
             }
         )
         .build()
+}
 
 fun getHeartPNGAnimation(width: Float, height: Float, initialDelay: Int = 0) =
     ItemStateBuilder(
@@ -374,31 +417,39 @@ fun getHeartPNGAnimation(width: Float, height: Float, initialDelay: Int = 0) =
         )
         .build()
 
-fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0) =
-    ItemStateBuilder(
-        composeCanvasDrawItem = getTextCanvasObject(),
-        initialX = (width / 2 - 400f),
-        initialY = (height / 2 + 0f),
+fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0): ItemState {
+    val time = 2000
+    val iterations = 1000
+    return ItemStateBuilder(
+        composeCanvasDrawItem = getPathCanvasObject(30f),
+        initialX = (width / 2),
+        initialY = (height / 2),
     )
         .animateX(
             to = {
-                initialX
+                initialX - 400f
             },
             animationSpec = {
                 repeatable(
-                    iterations = 10,
-                    animation = keyframes {
-                        durationMillis = 8000
-                        (width / 2) - 400f at 0 with InverseCosineEasing
-                        (width / 2) at 1000 with SineEasing
-                        (width / 2) + 400f at 2000 with InverseCosineEasing
-                        (width / 2) at 3000 with SineEasing
-                        (width / 2) - 400f at 4000 with InverseCosineEasing
-                        (width / 2) at 5000 with SineEasing
-                        (width / 2) + 400f at 6000 with InverseCosineEasing
-                        (width / 2) at 7000 with SineEasing
-                        (width / 2) - 400f at 8000 with InverseCosineEasing
-                    },
+                    iterations = iterations,
+                    animation =
+                        CosineWaveAnimationSpec(
+                            durationMillis = time,
+                            delta = -400f
+                        )
+//                    keyframes {
+//                        durationMillis = 8000
+//                        (width / 2) - 400f at 0 with inverseCosineEasing()
+//                        (width / 2) at 1000 with sineEasing()
+//                        (width / 2) + 400f at 2000 with inverseCosineEasing()
+//                        (width / 2) at 3000 with sineEasing()
+//                        (width / 2) - 400f at 4000 with inverseCosineEasing()
+//                        (width / 2) at 5000 with sineEasing()
+//                        (width / 2) + 400f at 6000 with inverseCosineEasing()
+//                        (width / 2) at 7000 with sineEasing()
+//                        (width / 2) - 400f at 8000 with inverseCosineEasing()
+//                    }
+                    ,
                     initialStartOffset = StartOffset(initialDelay)
                 )
             }
@@ -409,15 +460,21 @@ fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0) =
             },
             animationSpec = {
                 repeatable(
-                    iterations = 10,
-                    animation = keyframes {
-                        durationMillis = 8000
-                        (height / 2) at 0 with SineEasing
-                        (height / 2) - 400f at 1000 with InverseCosineEasing
-                        (height / 2) at 2000 with SineEasing
-                        (height / 2) + 400f at 3000 with InverseCosineEasing
-                        (height / 2) at 4000 with SineEasing
-                    },
+                    iterations = iterations,
+                    animation =
+                        SinWaveAnimationSpec(
+                            durationMillis = time,
+                            delta = -400f,
+                        )
+//                    keyframes {
+//                        durationMillis = 8000
+//                        (height / 2) at 0 with sineEasing()
+//                        (height / 2) - 400f at 1000 with inverseCosineEasing()
+//                        (height / 2) at 2000 with sineEasing()
+//                        (height / 2) + 400f at 3000 with inverseCosineEasing()
+//                        (height / 2) at 4000 with sineEasing()
+//                    }
+                    ,
                     initialStartOffset = StartOffset(initialDelay)
                 )
             }
@@ -428,18 +485,18 @@ fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0) =
             },
             animationSpec = {
                 repeatable(
-                    iterations = 10,
+                    iterations = iterations,
                     animation = keyframes {
-                        durationMillis = 8000
-                        0f at 0 with LinearEasing
-                        360f at 4000 with LinearEasing
+                        durationMillis = time
+                        0f at 0 with FastOutSlowInEasing
+                        360f at time with FastOutSlowInEasing
                     },
                     initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
         .terminalCondition { _, _, _, _, _, _, elapsedTimeMillis ->
-            elapsedTimeMillis > 80000 + initialDelay
+            elapsedTimeMillis > time * iterations + initialDelay
         }
         .animateColor(
             to = {
@@ -447,19 +504,24 @@ fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0) =
             },
             animationSpec = {
                 repeatable(
-                    iterations = 10,
+                    iterations = iterations,
                     animation = keyframes {
-                        durationMillis = 8000
-                        Color.Green at 2000 with LinearEasing
-                        initialColor at 4000 with LinearEasing
-                        Color.Red at 6000 with LinearEasing
-                        initialColor at 8000 with LinearEasing
+                        durationMillis = time
+                        Color.Green at time / 2 with FastOutSlowInEasing
+                        initialColor at time with FastOutSlowInEasing
+//                        Color.Red at 6000 with FastOutSlowInEasing
+//                        initialColor at 8000 with FastOutSlowInEasing
                     },
                     initialStartOffset = StartOffset(initialDelay)
                 )
             }
         )
         .build()
+}
+
+data class ItemStateHolder(
+    val items: List<ItemState> = emptyList()
+)
 
 // 0, 0.1, 0.2, ..., 0.9, 1, 0.9, 0.8, 0.7, ..., 0.2, 0.1
 data class ItemState constructor(
@@ -491,9 +553,9 @@ data class ItemState constructor(
     },
 )
 
-val SineEasing = Easing { fraction -> sin(fraction * 2 * Math.PI / 4).toFloat() }
+fun sineEasing(internalEasing: Easing = LinearEasing) = Easing { fraction -> sin(internalEasing.transform(fraction) * 2 * Math.PI / 4).toFloat() }
 
-val InverseCosineEasing = Easing { fraction -> 1 - cos(fraction * 2 * Math.PI / 4).toFloat() }
+fun inverseCosineEasing(internalEasing: Easing = LinearEasing) = Easing { fraction -> 1 - cos(internalEasing.transform(fraction) * 2 * Math.PI / 4).toFloat() }
 
 sealed class ComposeCanvasDrawItem
 
@@ -504,28 +566,28 @@ data class CanvasPath(
 data class CanvasText(val text: String, val style: () -> TextStyle) :
     ComposeCanvasDrawItem()
 
-data class CanvasImage(@DrawableRes val imageSrc: Int) :
+data class CanvasImage(val size: Size, val imageKey: ImageKey, val bitmap: Bitmap? = null) :
     ComposeCanvasDrawItem()
 
 data class CanvasObject @OptIn(ExperimentalTextApi::class) constructor(val objectToDraw: DrawScope.(textMeasurer: TextMeasurer, alpha: Float, angle: Float, color: Color, scale: Float) -> Unit) :
     ComposeCanvasDrawItem()
 
-fun getPathCanvasObject() = CanvasPath(
+fun getPathCanvasObject(size: Float = 120f) = CanvasPath(
     path = Path().apply {
-        heartPath(Size(120f, 120f))
+        heartPath(Size(size, size))
     },
 )
 
 fun getTextCanvasObject(text: String = "hi") =
     CanvasText(text) {
         TextStyle.Default.copy(
-            fontSize = 48.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
     }
 
-fun getImageCanvasObject(@DrawableRes resource: Int) =
-    CanvasImage(resource)
+fun getImageCanvasObject(size: Size, imageKey: ImageKey) =
+    CanvasImage(size, imageKey)
 
 @OptIn(ExperimentalTextApi::class)
 fun getCustomCanvasObject() = CanvasObject(
@@ -817,13 +879,13 @@ class SinWaveAnimationSpec(
     val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
     val delay: Int = 0,
     val easing: Easing = FastOutSlowInEasing,
-    val multiplier: Int = 100,
+    val delta: Float = 100f,
 ) : DurationBasedAnimationSpec<Float> {
 
     override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedDurationBasedAnimationSpec<V> =
         object : VectorizedDurationBasedAnimationSpec<V> {
             private val anim = VectorizedFloatAnimationSpec<V>(
-                SinWaveSpec(durationMillis, delayMillis, easing, multiplier)
+                SinWaveSpec(durationMillis, delayMillis, easing, delta)
             )
 
             override fun getValueFromNanos(
@@ -870,11 +932,68 @@ class SinWaveAnimationSpec(
     }
 }
 
+class CosineWaveAnimationSpec(
+    val durationMillis: Int = AnimationConstants.DefaultDurationMillis,
+    val delay: Int = 0,
+    val easing: Easing = FastOutSlowInEasing,
+    val delta: Float = 100f,
+) : DurationBasedAnimationSpec<Float> {
+
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedDurationBasedAnimationSpec<V> =
+        object : VectorizedDurationBasedAnimationSpec<V> {
+            private val anim = VectorizedFloatAnimationSpec<V>(
+                CosineWaveSpec(durationMillis, delayMillis, easing, delta)
+            )
+
+            override fun getValueFromNanos(
+                playTimeNanos: Long,
+                initialValue: V,
+                targetValue: V,
+                initialVelocity: V,
+            ): V {
+                return anim.getValueFromNanos(playTimeNanos,
+                    initialValue,
+                    targetValue,
+                    initialVelocity)
+            }
+
+            override fun getVelocityFromNanos(
+                playTimeNanos: Long,
+                initialValue: V,
+                targetValue: V,
+                initialVelocity: V,
+            ): V {
+                return anim.getVelocityFromNanos(playTimeNanos,
+                    initialValue,
+                    targetValue,
+                    initialVelocity)
+            }
+
+            override val delayMillis: Int
+                get() = this@CosineWaveAnimationSpec.delay
+            override val durationMillis: Int
+                get() = this@CosineWaveAnimationSpec.durationMillis
+        }
+
+    override fun equals(other: Any?): Boolean =
+        if (other is SinWaveAnimationSpec) {
+            other.durationMillis == this.durationMillis &&
+                    other.delay == this.delay &&
+                    other.easing == this.easing
+        } else {
+            false
+        }
+
+    override fun hashCode(): Int {
+        return (durationMillis * 31 + easing.hashCode()) * 31 + delay
+    }
+}
+
 class SinWaveSpec(
     val duration: Int = AnimationConstants.DefaultDurationMillis,
     val delay: Int = 0,
     private val easing: Easing = FastOutSlowInEasing,
-    private val multiplier: Int,
+    private val delta: Float,
 ) : FloatAnimationSpec {
 
     override fun getValueFromNanos(
@@ -887,7 +1006,49 @@ class SinWaveSpec(
         val clampedPlayTime = clampPlayTime(playTimeMillis)
         val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
         val fraction = easing.transform(rawFraction.coerceIn(0f, 1f))
-        return initialValue + multiplier * (sin(fraction * 2 * Math.PI).toFloat())
+        return initialValue + delta * (sin(fraction * 2 * Math.PI).toFloat())
+    }
+
+    private fun clampPlayTime(playTime: Long): Long {
+        return (playTime - delay).coerceIn(0, duration.toLong())
+    }
+
+    override fun getDurationNanos(
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Long {
+        return (delay + duration) * 1_000_000L
+    }
+
+    override fun getVelocityFromNanos(
+        playTimeNanos: Long,
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Float {
+        return 0f
+    }
+}
+
+class CosineWaveSpec(
+    val duration: Int = AnimationConstants.DefaultDurationMillis,
+    val delay: Int = 0,
+    private val easing: Easing = FastOutSlowInEasing,
+    private val delta: Float,
+) : FloatAnimationSpec {
+
+    override fun getValueFromNanos(
+        playTimeNanos: Long,
+        initialValue: Float,
+        targetValue: Float,
+        initialVelocity: Float,
+    ): Float {
+        val playTimeMillis = playTimeNanos / 1_000_000L
+        val clampedPlayTime = clampPlayTime(playTimeMillis)
+        val rawFraction = if (duration == 0) 1f else clampedPlayTime / duration.toFloat()
+        val fraction = easing.transform(rawFraction.coerceIn(0f, 1f))
+        return initialValue + delta * (cos(fraction * 2 * Math.PI).toFloat())
     }
 
     private fun clampPlayTime(playTime: Long): Long {
@@ -914,25 +1075,37 @@ class SinWaveSpec(
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
-fun Heart(modifier: Modifier, items: List<ItemState>) {
+fun Heart(modifier: Modifier, _items: () -> List<ItemState>) {
+
+    val items = _items()
+
+//    Log.d("dilraj", "recomposing canvas ${items.joinToString { it.toString() }}")
     Log.d("dilraj", "recomposing canvas")
 
     val resources = LocalContext.current.resources
 
-    val originalBitmap = remember {
-        BitmapFactory.decodeResource(
-            resources,
-            R.drawable.heart_stack
-        )
-    }
-    val bitmap = remember {
-        Bitmap.createScaledBitmap(
-            originalBitmap,
-            100,
-            100 * originalBitmap.height / originalBitmap.width,
-            true
-        )
-    }
+//    val bitmaps by remember {
+//        derivedStateOf {
+//            Log.d("dilraj", "recomposing canvas inside derived state ${items.joinToString { it.toString() }}")
+//            _items()
+//                .filter { it.itemToDraw is CanvasImage }
+//                .map {
+//                    (it.itemToDraw as CanvasImage).imageSrc
+//                }
+//                .associateWith { imageResource ->
+//                val originalBitmap = BitmapFactory.decodeResource(
+//                    resources,
+//                    imageResource,
+//                )
+//                Bitmap.createScaledBitmap(
+//                    originalBitmap,
+//                    100,
+//                    100 * originalBitmap.height / originalBitmap.width,
+//                    true
+//                )
+//            }
+//        }
+//    }
 
     val textMeasurer = rememberTextMeasurer()
 
@@ -1004,6 +1177,8 @@ fun Heart(modifier: Modifier, items: List<ItemState>) {
                                 )
                             }
                             is CanvasImage -> {
+                                val bitmap = itemToDraw.bitmap
+                                bitmap ?: return@drawScope
                                 val width = bitmap.width
                                 val height = bitmap.height
                                 scale(
@@ -1298,4 +1473,9 @@ fun <T> Iterator<T>.forEachIndexed(block: (Int, T) -> Unit) {
         block(index, next())
         index++
     }
+}
+
+sealed class ImageKey {
+    data class Drawable(@DrawableRes val id: Int) : ImageKey()
+    data class URL(val url: String) : ImageKey()
 }
