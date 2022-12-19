@@ -2,7 +2,6 @@ package com.example.myapplication
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -60,7 +59,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,16 +72,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -106,6 +99,8 @@ import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.Serializable
 import java.util.*
+import java.util.concurrent.TimeUnit
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -119,9 +114,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 ProvideWindowInsets {
-                    Box(Modifier
-                        .fillMaxSize()
-                        .background(Color.DarkGray))
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.DarkGray))
                     {
                         Screen()
                     }
@@ -161,14 +157,25 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
         Button(
             onClick = {
                 val direction = if (Random.nextFloat() < 0.5) -1 else 1
-                Log.d("debugdilraj", "button clicked")
+                Log.d("debugdilrajissue", "button clicked")
+
+                val path = Path().apply {
+                    moveTo((width / 2f), (height - 200f))
+                    val controlX = Random.nextInt(0, (width).toInt()).toFloat()
+                    val controlY = Random.nextInt((height / 2f).toInt(), (height).toInt()).toFloat()
+                    val endX = (width / 2f)
+                    val endY = height / 2f
+                    quadraticBezierTo(controlX, controlY, endX, endY)
+                    moveTo(endX, endY)
+                }
+
                 viewModel.sendItemClick(
                     List(6) {
 //                        getItemCircleLoader(width, height, (it * 120))
-                        getHeartAnimation(width, height, (it * 25), direction)
+                        getHeartAnimation(width, height, (it * 25), direction, path = path)
 //                        getParabolaAnimation(width, height)
 //                        getHeartPNGAnimation(width, height, (it * 100))
-                    }.reversed()
+                    }
                 )
             },
             modifier = Modifier
@@ -179,6 +186,42 @@ fun Screen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewM
         ) {
             Text(
                 text = "Like",
+                color = Color.White
+            )
+        }
+
+        Button(
+            onClick = {
+                val direction = if (Random.nextFloat() < 0.5) -1 else 1
+                Log.d("debugdilraj", "button clicked")
+
+                val path = Path().apply {
+                    moveTo((width / 2f), (height - 200f))
+                    val controlX = Random.nextInt(0, (width).toInt()).toFloat()
+                    val controlY = Random.nextInt((height / 2f).toInt(), (height).toInt()).toFloat()
+                    val endX = (width / 2f)
+                    val endY = height / 2f
+                    quadraticBezierTo(controlX, controlY, endX, endY)
+                    moveTo(endX, endY)
+                }
+
+                viewModel.sendItemClick(
+                    List(6) {
+//                        getItemCircleLoader(width, height, (it * 120))
+                        getHeartAnimation(width, height, (it * 25), direction, size = 120f, path = path)
+//                        getParabolaAnimation(width, height)
+//                        getHeartPNGAnimation(width, height, (it * 100))
+                    }.reversed()
+                )
+            },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(24.dp)
+                .wrapContentHeight()
+                .wrapContentWidth()
+        ) {
+            Text(
+                text = "Like small",
                 color = Color.White
             )
         }
@@ -203,43 +246,30 @@ fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): It
         initialY = (height - 500f),
     )
         .animateX {
-            object : Animation<Float, AnimationVector1D> {
+            object : ValueBasedAnimation {
                 override val durationNanos: Long
                     get() = Long.MAX_VALUE
                 override val isInfinite: Boolean
                     get() = true
                 override val targetValue: Float
                     get() = 0f
-                override val typeConverter: TwoWayConverter<Float, AnimationVector1D>
-                    get() = Float.VectorConverter
 
                 override fun getValueFromNanos(playTimeNanos: Long): Float {
                     return initialX + (xVelocity * playTimeNanos / 100_000_000).toFloat()
                 }
-
-                override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
-                    return Float.VectorConverter.convertToVector(targetValue)
-                }
             }
         }
         .animateY {
-            object : Animation<Float, AnimationVector1D> {
+            object : ValueBasedAnimation {
                 override val durationNanos: Long
                     get() = Long.MAX_VALUE
                 override val isInfinite: Boolean
                     get() = true
                 override val targetValue: Float
                     get() = 0f
-                override val typeConverter: TwoWayConverter<Float, AnimationVector1D>
-                    get() = Float.VectorConverter
-
                 override fun getValueFromNanos(playTimeNanos: Long): Float {
                     val time = playTimeNanos / 100_000_000f
                     return initialY - ((yVelocity * time) + (0.5 * G * (time * time))).toFloat()
-                }
-
-                override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
-                    return Float.VectorConverter.convertToVector(targetValue)
                 }
             }
         }
@@ -253,78 +283,161 @@ fun getParabolaAnimation(width: Float, height: Float, initialDelay: Int = 0): It
 //
 //}
 
-fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0, direction: Int): ItemState {
+fun getHeartAnimation(width: Float, height: Float, initialDelay: Int = 0, direction: Int, size: Float = 220f, path: Path): ItemState {
     val time = 1500
     val fadeTime = 1500
     val xDelta = 100f * direction
     val angle = 25f * direction
 
+    val tan = floatArrayOf(0f,0f)
+    val pos = floatArrayOf(0f, 0f)
+
+    val pathMeasure = android.graphics.PathMeasure().apply {
+        setPath(path.asAndroidPath(), true)
+    }
+
+    val lastLog = if (initialDelay % 6 == 0) {
+        { percentage: Float ->
+            Log.d("lastlog", "percentage is $percentage")
+        }
+    } else {
+        null
+    }
+
+    pathMeasure.getPosTan(pathMeasure.length * 0.0f, pos, tan)
+    val degrees = atan2(tan[1], tan[0]) * 180.0 / Math.PI
+    val initAngle =  degrees.toFloat() - 270
+
     return ItemStateBuilder(
-        composeCanvasDrawItem = getImageCanvasObject(Size(220f, 200f), ImageKey.Drawable(R.drawable.hearts_100)),//ImageKey.URL("https://i.picsum.photos/id/548/200/300.jpg?hmac=dXVAc-s_U8QgoYUrMld43VmrOby1cluk-akWgxY6b9Y")),
+        composeCanvasDrawItem = getImageCanvasObject(Size(size, size), ImageKey.Drawable(R.drawable.hearts_100)),//ImageKey.URL("https://i.picsum.photos/id/548/200/300.jpg?hmac=dXVAc-s_U8QgoYUrMld43VmrOby1cluk-akWgxY6b9Y")),
         initialX = (width / 2f),//Random.nextInt(0, (width).toInt()).toFloat(),
         initialY = (height - 200f),
-        initialAngle = 0f,
+        initialAngle = initAngle,
     )
-        .animateX(
-            to = {
-                initialX
-            },
-            animationSpec = {
-                repeatable(
-                    iterations = 1,
-                    initialStartOffset = StartOffset(initialDelay),
-                    animation = SinWaveAnimationSpec(
-                        durationMillis = time,
-                        delta = xDelta,
-                        easing = FastOutSlowInEasing
-                    )
-                )
-//                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
+        .terminalCondition { _, _, _, _, _, _, elapsedTimeMillis ->
+            elapsedTimeMillis > time
+        }
+        .animateX {
+            object : ValueBasedAnimation {
+                override val durationNanos: Long
+                    get() = time.toLong() + initialDelay.toLong()
+                override val isInfinite: Boolean
+                    get() = false
+                override val targetValue: Float
+                    get() = (width / 2f)
+
+                override fun getValueFromNanos(playTimeNanos: Long): Float {
+                    val percentage = (playTimeNanos - TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS)).toFloat() / TimeUnit.NANOSECONDS.convert(time.toLong(), TimeUnit.MILLISECONDS)
+                    if (playTimeNanos < TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS))
+                        return initialX
+                    pathMeasure.getPosTan(pathMeasure.length * FastOutSlowInEasing.transform(percentage) * 0.5f, pos, tan)
+                    return pos[0]
+                }
             }
-        )
-        .animateY(
-            to = {
-                height / 2
-            },
-            animationSpec = {
-                repeatable(
-                    iterations = 1,
-                    initialStartOffset = StartOffset(initialDelay),
-                    animation = tween(durationMillis = time, easing = FastOutSlowInEasing)
-                )
-//                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+        }
+        .animateY {
+            object : ValueBasedAnimation {
+                override val durationNanos: Long
+                    get() = time.toLong() + initialDelay.toLong()
+                override val isInfinite: Boolean
+                    get() = false
+                override val targetValue: Float
+                    get() = height / 2f
+
+                override fun getValueFromNanos(playTimeNanos: Long): Float {
+                    val percentage = (playTimeNanos - TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS)).toFloat() / TimeUnit.NANOSECONDS.convert(time.toLong(), TimeUnit.MILLISECONDS)
+
+                    lastLog?.invoke(percentage)
+                    Log.d("debugdilrajdelay", "percentage = ${percentage}" +
+                            "")
+                    Log.d("debugdilrajtime", "getValueFromNanos: ${pos.joinToString { it.toString() }} at ${playTimeNanos.toFloat() / TimeUnit.NANOSECONDS.convert(time.toLong(), TimeUnit.MILLISECONDS)}")
+                    if (playTimeNanos < TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS))
+                        return initialY
+                    pathMeasure.getPosTan(pathMeasure.length * FastOutSlowInEasing.transform(percentage) * 0.5f, pos, tan)
+                    return pos[1]
+                }
             }
-        )
+        }
+        .animateAngle {
+            object : ValueBasedAnimation {
+                override val durationNanos: Long
+                    get() = time.toLong() + initialDelay.toLong()
+                override val isInfinite: Boolean
+                    get() = false
+                override val targetValue: Float
+                    get() = 0f
+
+                override fun getValueFromNanos(playTimeNanos: Long): Float {
+                    val percentage = (playTimeNanos - TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS)).toFloat() / TimeUnit.NANOSECONDS.convert(time.toLong(), TimeUnit.MILLISECONDS)
+                    if (playTimeNanos < TimeUnit.NANOSECONDS.convert(initialDelay.toLong(), TimeUnit.MILLISECONDS))
+                        return initialAngle
+                    pathMeasure.getPosTan(pathMeasure.length * FastOutSlowInEasing.transform(percentage) * 0.5f, pos, tan)
+                    val degrees = atan2(tan[1], tan[0]) * 180.0 / Math.PI
+                    return degrees.toFloat() - 270
+                }
+
+            }
+        }
+//        .animateX(
+//            to = {
+//                initialX
+//            },
+//            animationSpec = {
+//                repeatable(
+//                    iterations = 1,
+//                    initialStartOffset = StartOffset(initialDelay),
+//                    animation = SinWaveAnimationSpec(
+//                        durationMillis = time,
+//                        delta = xDelta,
+//                        easing = FastOutSlowInEasing
+//                    )
+//                )
+////                SinWaveAnimationSpec(durationMillis = 3500, multiplier = 100)
+//            }
+//        )
+//        .animateY(
+//            to = {
+//                height / 2
+//            },
+//            animationSpec = {
+//                repeatable(
+//                    iterations = 1,
+//                    initialStartOffset = StartOffset(initialDelay),
+//                    animation = tween(durationMillis = time, easing = FastOutSlowInEasing)
+//                )
+////                tween(durationMillis = 3500, easing = FastOutSlowInEasing)
+//            }
+//        )
+//        .animateAngle(
+//            to = {
+//                angle
+//            },
+//            animationSpec = {
+//                repeatable(
+//                    iterations = 1,
+//                    initialStartOffset = StartOffset(initialDelay),
+//                    animation = CosineWaveAnimationSpec(durationMillis = time,
+//                        delta = angle,
+//                        easing = FastOutSlowInEasing),
+////                    animation = keyframes {
+////                        durationMillis = 4000
+////                        45f at 0 with inverseCosineEasing(FastOutSlowInEasing)
+////                        0f at 1000 with sineEasing(FastOutSlowInEasing)
+////                        -45f at 2000 with inverseCosineEasing(FastOutSlowInEasing)
+////                        0f at 3000 with sineEasing(FastOutSlowInEasing)
+////                        45f at 4000 with inverseCosineEasing(FastOutSlowInEasing)
+//////                        45f at 3600 with SineEasing
+////                    }
+//                )
+////                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
+//            }
+//        )
         .animateAlpha(
             to = {
                 0f
             },
             animationSpec = {
                 tween(durationMillis = fadeTime, easing = LinearEasing)
-            }
-        )
-        .animateAngle(
-            to = {
-                angle
-            },
-            animationSpec = {
-                repeatable(
-                    iterations = 1,
-                    initialStartOffset = StartOffset(initialDelay),
-                    animation = CosineWaveAnimationSpec(durationMillis = time,
-                        delta = angle,
-                        easing = FastOutSlowInEasing),
-//                    animation = keyframes {
-//                        durationMillis = 4000
-//                        45f at 0 with inverseCosineEasing(FastOutSlowInEasing)
-//                        0f at 1000 with sineEasing(FastOutSlowInEasing)
-//                        -45f at 2000 with inverseCosineEasing(FastOutSlowInEasing)
-//                        0f at 3000 with sineEasing(FastOutSlowInEasing)
-//                        45f at 4000 with inverseCosineEasing(FastOutSlowInEasing)
-////                        45f at 3600 with SineEasing
-//                    }
-                )
-//                tween(durationMillis = 2500, easing = FastOutSlowInEasing)
             }
         )
 //        .animateColor(
@@ -520,6 +633,7 @@ fun getItemCircleLoader(width: Float, height: Float, initialDelay: Int = 0): Ite
 }
 
 data class ItemStateHolder(
+    val id: String = UUID.randomUUID().toString(),
     val items: List<ItemState> = mutableListOf()
 )
 
@@ -716,24 +830,50 @@ fun ItemStateBuilder.animateX(
     return this
 }
 
+interface ValueBasedAnimation {
+    val durationNanos: Long
+    val isInfinite: Boolean
+    val targetValue: Float
+    fun getValueFromNanos(playTimeNanos: Long): Float
+}
+
+fun ValueBasedAnimation.toAnimation(): Animation<Float, AnimationVector1D> {
+    return object : Animation<Float, AnimationVector1D> {
+        override val durationNanos: Long
+            get() = this@toAnimation.durationNanos
+        override val isInfinite: Boolean
+            get() = this@toAnimation.isInfinite
+        override val targetValue: Float
+            get() = this@toAnimation.targetValue
+        override val typeConverter: TwoWayConverter<Float, AnimationVector1D>
+            get() = Float.VectorConverter
+        override fun getValueFromNanos(playTimeNanos: Long): Float {
+            return this@toAnimation.getValueFromNanos(playTimeNanos)
+        }
+        override fun getVelocityVectorFromNanos(playTimeNanos: Long): AnimationVector1D {
+            return Float.VectorConverter.convertToVector(targetValue)
+        }
+    }
+}
+
 fun ItemStateBuilder.animateX(
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+    animation: ItemStateBuilder.() -> ValueBasedAnimation,
 ): ItemStateBuilder {
-    xAnimation = animation()
+    xAnimation = animation().toAnimation()
     return this
 }
 
 fun ItemStateBuilder.animateY(
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+    animation: ItemStateBuilder.() -> ValueBasedAnimation,
 ): ItemStateBuilder {
-    yAnimation = animation()
+    yAnimation = animation().toAnimation()
     return this
 }
 
 fun ItemStateBuilder.animateSize(
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+    animation: ItemStateBuilder.() -> ValueBasedAnimation,
 ): ItemStateBuilder {
-    scaleAnimation = animation()
+    scaleAnimation = animation().toAnimation()
     return this
 }
 
@@ -745,16 +885,16 @@ fun ItemStateBuilder.animateColor(
 }
 
 fun ItemStateBuilder.animateAlpha(
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+    animation: ItemStateBuilder.() -> ValueBasedAnimation,
 ): ItemStateBuilder {
-    alphaAnimation = animation()
+    alphaAnimation = animation().toAnimation()
     return this
 }
 
 fun ItemStateBuilder.animateAngle(
-    animation: ItemStateBuilder.() -> Animation<Float, AnimationVector1D>,
+    animation: ItemStateBuilder.() -> ValueBasedAnimation,
 ): ItemStateBuilder {
-    angleAnimation = animation()
+    angleAnimation = animation().toAnimation()
     return this
 }
 
@@ -1080,7 +1220,7 @@ fun Heart(modifier: Modifier, _items: () -> List<ItemState>) {
     val items = _items()
 
 //    Log.d("dilraj", "recomposing canvas ${items.joinToString { it.toString() }}")
-    Log.d("dilraj", "recomposing canvas")
+    Log.d("debugdilrajissue", "recomposing canvas")
 
     val resources = LocalContext.current.resources
 
@@ -1112,7 +1252,8 @@ fun Heart(modifier: Modifier, _items: () -> List<ItemState>) {
     Canvas(
         modifier = modifier,
         onDraw = drawScope@{
-            for (item in items) {
+            items.forEachIndexed { index, item ->
+                Log.d("lastlogcanvas", "index is $index -> ${item.y.toString()}")
                 translate(top = item.y, left = item.x) {
                     drawContext.canvas.nativeCanvas.apply {
                         when (val itemToDraw = item.itemToDraw) {

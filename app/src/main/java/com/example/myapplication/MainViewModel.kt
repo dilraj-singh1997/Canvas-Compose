@@ -13,12 +13,7 @@ import com.bumptech.glide.request.target.Target
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.getAndUpdate
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.Continuation
@@ -26,11 +21,11 @@ import kotlin.coroutines.resume
 
 class MainViewModel : ViewModel() {
 
-    private val _stateFlow = MutableStateFlow(emptyList<ItemStateHolder>())
+    private val _stateFlow: MutableStateFlow<List<ItemStateHolder>> = MutableStateFlow(emptyList())
     val stateFlow: Flow<List<ItemState>>
         get() = _stateFlow.asStateFlow().map {
-            it.flatMap {
-                it.items
+            it.flatMap { itemStateHolder ->
+                itemStateHolder.items
             }
         }
 
@@ -40,7 +35,9 @@ class MainViewModel : ViewModel() {
 
     private var continuation: Continuation<Unit>? = null
 
-    private val leftItems: MutableList<ItemState> = mutableListOf()
+    private val downloadChannel = Channel<ImageKey>(Channel.UNLIMITED)
+
+    private val leftItems: MutableList<ItemStateHolder> = mutableListOf()
 
     private val fullScaleBitmaps: MutableMap<ImageKey, Bitmap> = mutableMapOf()
     private val bitmaps: MutableMap<Pair<ImageKey, Size>, Bitmap> = mutableMapOf()
@@ -51,21 +48,98 @@ class MainViewModel : ViewModel() {
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            for (imageKey in downloadChannel) {
+                if (fullScaleBitmaps.containsKey(imageKey)) {
+                    bitmapDownloadChannel.trySend(Pair(imageKey, fullScaleBitmaps[imageKey]!!))
+                    continue
+                }
+                if (jobs[imageKey] != null)
+                    continue
+                jobs[imageKey] = viewModelScope.launch {
+                    MyApp.instance?.let {
+                        Glide
+                            .with(it.applicationContext)
+                            .asBitmap()
+                            .let {
+                                when (imageKey) {
+                                    is ImageKey.Drawable -> it.load(imageKey.id)
+                                    is ImageKey.URL -> it.load(imageKey.url)
+                                }
+                            }
+                            .listener(object : RequestListener<Bitmap> {
+                                override fun onLoadFailed(
+                                    e: GlideException?,
+                                    model: Any?,
+                                    target: Target<Bitmap>?,
+                                    isFirstResource: Boolean,
+                                ): Boolean {
+                                    return true
+                                }
+
+                                override fun onResourceReady(
+                                    resource: Bitmap?,
+                                    model: Any?,
+                                    target: Target<Bitmap>?,
+                                    dataSource: DataSource?,
+                                    isFirstResource: Boolean,
+                                ): Boolean {
+                                    Log.d("dilraj", "bitmap ready")
+                                    resource?.let {
+                                        bitmapDownloadChannel.trySend(Pair(imageKey, it))
+                                    }
+                                    return true
+                                }
+
+                            })
+                            .submit()
+                    }
+                }
+            }
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
             for ((id, bitmap) in bitmapDownloadChannel) {
                 fullScaleBitmaps[id] = bitmap
                 leftItems
                     .filter { item ->
-                        item.itemToDraw is CanvasImage && item.itemToDraw.imageKey == id
+                        item.items.any { it.itemToDraw is CanvasImage && it.itemToDraw.imageKey == id }
                     }
                     .also {
-                        leftItems.removeAll(it)
+                        leftItems.removeAll { holder ->
+                            it.any { it.id == holder.id }
+                        }
                         Log.d("dilraj", "sending items ${it.joinToString { it.toString() }}")
+
+                        it.forEach {
+                            it.items.forEach {
+                                if (it.itemToDraw is CanvasImage) {
+                                    if (!bitmaps.containsKey(Pair(it.itemToDraw.imageKey, it.itemToDraw.size))) {
+
+                                        Log.d("dilraj", "creating scaled bitmap ${it.itemToDraw.size.width.toInt()} -- ${bitmap.width}")
+                                        bitmaps[Pair(it.itemToDraw.imageKey, it.itemToDraw.size)] = Bitmap.createScaledBitmap(
+                                            bitmap,
+                                            it.itemToDraw.size.width.toInt(),
+                                            it.itemToDraw.size.height.toInt(),
+                                            true
+                                        ).also {
+                                            Log.d("dilraj", "creating scaled new bitmap ${bitmap.width} -- ${it.width}")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         sendItemClick(
-                            it.map {
-                                it.copy(
-                                    itemToDraw = (it.itemToDraw as CanvasImage).copy(bitmap = bitmap),
-                                    time = System.nanoTime()
-                                )
+                            it.flatMap {
+                                val list = it.items
+                                val x = list.toMutableList().map {
+                                    it.copy(
+                                        itemToDraw = (it.itemToDraw as CanvasImage).copy(bitmap = bitmaps[Pair(it.itemToDraw.imageKey, it.itemToDraw.size)]),
+                                        time = System.nanoTime()
+                                    )
+                                }
+                                Log.d("dilraj", "sending new list ${x.joinToString { it.toString() }}")
+                                x
                             }
                         )
                     }
@@ -74,15 +148,32 @@ class MainViewModel : ViewModel() {
 
         viewModelScope.launch(Dispatchers.IO) {
             for (itemStateHolder in channelItemClicked) {
-                Log.d("debugdilraj", "got new item for channel")
-                _stateFlow.getAndUpdate {
-                    Log.d("debugdilraj", "got new item for channel adding items")
+                Log.d("debugdilrajissue", "got new item for channel")
+                _stateFlow.updateAndGet {
+                    Log.d("debugdilrajissue", "got new item for channel adding items")
                     it.toMutableList().apply {
-                        add(itemStateHolder)
+                        val additionalItems = itemStateHolder.items.toMutableList()
+                        additionalItems.iterator().forEachIndexed { i, itemState ->
+                            additionalItems.safeSet(i) {
+                                it.copy(time = System.nanoTime())
+                            }
+                        }
+                        add(itemStateHolder.copy(items = additionalItems))
                     }
+                }.also {
+                    Log.d(
+                        "debugdilrajissue",
+                        "list after adding items is ${it.size} ${it.joinToString { it.items.joinToString { it.toString() } }}"
+                    )
+                    Log.d(
+                        "debugdilrajissue",
+                        "list after adding items from value getter is ${_stateFlow.value.size} ${_stateFlow.value.joinToString { it.items.joinToString { it.toString() } }}"
+                    )
                 }
-                Log.d("dilraj", "resuming continuation $continuation")
-                continuation?.resume(Unit)
+                Log.d("debugdilrajissue", "resuming continuation $continuation")
+                runCatching {
+                    continuation?.resume(Unit)
+                }
                 continuation = null
             }
         }
@@ -90,7 +181,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             for (frameUpdate in frameTicker) {
                 val itemStateHolderList = _stateFlow.value.toMutableList()
-                Log.d("dilraj", "got update in frame ticker ${itemStateHolderList.size}")
+                Log.d("debugdilrajissue", "got update in frame ticker ${itemStateHolderList.size}")
                 if (itemStateHolderList.isEmpty()) {
                     suspendCancellableCoroutine {
                         continuation = it
@@ -98,31 +189,32 @@ class MainViewModel : ViewModel() {
                 } else {
                     val iterHolder = itemStateHolderList.iterator()
                     val removal = mutableListOf<ItemState>()
+                    val removalHolder = mutableListOf<ItemStateHolder>()
                     iterHolder.forEachIndexed { index, itemStateHolder ->
 
                         val iter = itemStateHolder.items.iterator()
 
                         iter.forEachIndexed { index1, itemState ->
-                            if (itemState.itemToDraw is CanvasImage && !fullScaleBitmaps.containsKey(itemState.itemToDraw.imageKey)) {
-                                Log.d("dilraj", "inside the block to remove to left items")
-                                leftItems.add(itemState)
-                                removal.add(itemState)
+                            if (itemState.itemToDraw is CanvasImage && !bitmaps.containsKey(Pair(itemState.itemToDraw.imageKey, itemState.itemToDraw.size))) {
+                                Log.d("debugdilrajissue", "inside the block to remove to left items")
+                                leftItems.add(itemStateHolder)
+                                removalHolder.add(itemStateHolder)
                                 loadImage(itemState.itemToDraw)
+                                return@forEachIndexed
                             } else {
                                 if (itemState.itemToDraw is CanvasImage && itemState.itemToDraw.bitmap == null) {
-                                    Log.d("dilraj", "setting bitmaps")
+                                    Log.d("debugdilrajissue", "setting bitmaps")
 
                                     itemStateHolderList.safeSet(index) {
                                         val list = it.items.toMutableList()
                                         list.safeSet(index1) {
                                             it.copy(
-                                                itemToDraw = (it.itemToDraw as CanvasImage).copy(bitmap = fullScaleBitmaps[itemState.itemToDraw.imageKey])
+                                                itemToDraw = (it.itemToDraw as CanvasImage).copy(bitmap = bitmaps[Pair(itemState.itemToDraw.imageKey, itemState.itemToDraw.size)])
                                             )
                                         }
                                         it.copy(items = list)
                                     }
-
-                                    itemStateHolder.items
+                                    Log.d("debugdilrajissue", "setting bitmaps ${itemStateHolderList.joinToString { it.items.joinToString { it.itemToDraw.toString() } }}")
                                 }
                                 val counter = System.nanoTime() - itemState.time
                                 val yTicker =
@@ -179,13 +271,23 @@ class MainViewModel : ViewModel() {
                         }
                     }
 
-                    itemStateHolderList.removeAll {
-                        it.items.isEmpty()
-                    }
-
-                    Log.d("dilraj", "setting value")
                     _stateFlow.update {
-                        itemStateHolderList.toMutableList()
+                        Log.d("debugdilrajissue", "setting value")
+                        val _new = it.toMutableList()
+                        _new.iterator().forEachIndexed { i, itemStateHolder ->
+                            _new.safeSet(i) {
+                                itemStateHolderList.firstOrNull {
+                                    it.id == itemStateHolder.id
+                                } ?: it
+                            }
+                        }
+                        _new.removeAll {
+                            removalHolder.any { it.id == it.id }
+                        }
+                        _new.removeAll {
+                            it.items.isEmpty()
+                        }
+                        _new.toMutableList()
                     }
                 }
             }
@@ -193,47 +295,7 @@ class MainViewModel : ViewModel() {
     }
 
     private fun loadImage(canvasImage: CanvasImage) {
-        if (jobs[canvasImage.imageKey] != null)
-            return
-        jobs[canvasImage.imageKey] = viewModelScope.launch {
-            MyApp.instance?.let {
-                Glide
-                    .with(it.applicationContext)
-                    .asBitmap()
-                    .let {
-                        when (canvasImage.imageKey) {
-                            is ImageKey.Drawable -> it.load(canvasImage.imageKey.id)
-                            is ImageKey.URL -> it.load(canvasImage.imageKey.url)
-                        }
-                    }
-                    .listener(object : RequestListener<Bitmap> {
-                        override fun onLoadFailed(
-                            e: GlideException?,
-                            model: Any?,
-                            target: Target<Bitmap>?,
-                            isFirstResource: Boolean,
-                        ): Boolean {
-                            return true
-                        }
-
-                        override fun onResourceReady(
-                            resource: Bitmap?,
-                            model: Any?,
-                            target: Target<Bitmap>?,
-                            dataSource: DataSource?,
-                            isFirstResource: Boolean,
-                        ): Boolean {
-                            Log.d("dilraj", "bitmap ready")
-                            resource?.let {
-                                bitmapDownloadChannel.trySend(Pair(canvasImage.imageKey, it))
-                            }
-                            return true
-                        }
-
-                    })
-                    .submit()
-            }
-        }
+        downloadChannel.trySend(canvasImage.imageKey)
     }
 
     fun onFrameAvailable() {
@@ -241,6 +303,6 @@ class MainViewModel : ViewModel() {
     }
 
     fun sendItemClick(items: List<ItemState>) {
-        channelItemClicked.trySend(ItemStateHolder(items.toMutableList()))
+        channelItemClicked.trySend(ItemStateHolder(items = items.toMutableList()))
     }
 }
